@@ -3,53 +3,7 @@ library(pheatmap)
 library(tidyverse)
 
 # function
-rra_extract <- function(m_list, logfc = 0.0, fdr = 0.05){
-  # combine deg
-  combine_degs <- names(m_list) %>% 
-    lapply(X = ., FUN = function(list_name){
-      tmp <- multiple_limma[[list_name]] %>% 
-        filter(adj.P.Val < fdr & (logFC > logfc | logFC < -(logfc))) %>% 
-                 arrange(desc(logFC)) %>% 
-                 select(rowname, logFC)
-               colnames(tmp) <- c("GENE", list_name)
-               return(tmp)
-    }) %>% reduce(., left_join, by = "GENE")
-  
-  # up-regulated
-  up_degs <- names(m_list) %>% 
-    lapply(X = ., FUN = function(list_name){
-      m_list[[list_name]] %>% 
-        filter(adj.P.Val < fdr & logFC > logfc) %>%
-        pull(rowname) %>%
-        return()
-    }) 
-      
-  # down-regulated
-  down_degs <- names(m_list) %>% 
-    lapply(X = ., FUN = function(list_name){
-      m_list[[list_name]] %>% 
-        filter(adj.P.Val < fdr & logFC < -(logfc)) %>% 
-        pull(rowname) %>% 
-        return()
-    }) 
-      
-  # Aggregate the inputs
-  # run RRA
-  up_deg_rra <- aggregateRanks(glist = up_degs, method = "RRA") %>%
-    as_tibble() %>% 
-    filter(Score < 0.05) %>% 
-    arrange(Score)
-  
-  down_deg_rra <- aggregateRanks(glist = down_degs, method = "RRA") %>%
-    as_tibble() %>% 
-    filter(Score < 0.05) %>% 
-    arrange(Score)
-  
-  # 1 - combine deg, 2 - up-regulated RRA 3 - down-regulated RRA
-  list(combine_deg = combine_degs, up_deg_rra = up_deg_rra, down_deg_rra = down_deg_rra) %>% 
-    return()
-}
-
+source("src/function.R")
 
 # load
 load("~/WORK/GEO/GEO_integrated.RData")

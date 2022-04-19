@@ -207,7 +207,29 @@ getGeneExpressionFromGEO <- function(datasetGeoCode, retrieveGeneSymbols, verbos
       
     }
     
-    return(gene_expression)
+    # gene expression duplicated probe remove using mdedin max
+    # duplicate remove probe / gene
+    gene_name <- gene_expression$GeneSymbol
+    sample_name <- colnames(gene_expression)[1:(length(colnames(gene_expression)) - 1)]
+    probe_MAD <- gene_expression %>% 
+      select(-GeneSymbol) %>% 
+      as.matrix() %>% 
+      apply(.,1,mad) %>% 
+      tibble(id = seq(length(.)), gene_name = gene_name, MAD = .) %>% 
+      arrange(desc(MAD))
+    probe_MAD_dup <- probe_MAD[which(!duplicated(probe_MAD$gene_name)),] %>% 
+      filter(gene_name != "") %>% 
+      arrange(id)
+    gene_expression <- gene_expression[probe_MAD_dup$id, ]
+    
+    geneExpression_dup <- gene_expression %>% 
+      select(-GeneSymbol) %>% 
+      as.matrix()
+    rownames(geneExpression_dup) <- gene_expression$GeneSymbol
+    colnames(geneExpression_dup) <- colnames(gene_expression)[1:(length(gene_expression) - 1)]
+    
+    return(list(gene_expression = geneExpression_dup , 
+                pheno = phenoData(gset)))
   }
 }   
 

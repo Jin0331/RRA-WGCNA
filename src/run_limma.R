@@ -9,49 +9,49 @@ source("src/function.R")
 
 multiple_limma <- list()
 
-
-# geoquery
+# 1 - gene expression, 2 - phenotype
 gse_name <- "GSE14520"
-geneExpression <- getGeneExpressionFromGEO(datasetGeoCode = gse_name, 
+gse_data <- getGeneExpressionFromGEO(datasetGeoCode = gse_name, 
                                            retrieveGeneSymbols = TRUE, 
                                            verbose = TRUE)
 
+geneExpression <- gse_data$gene_expression
+# rownames(geneExpression) <- geneExpression$GeneSymbol
+pheno <- gse_data$pheno@data
 
-gse <- getGEO(gse_name,GSEMatrix=TRUE)
-gse <- gse[[1]]
-
-eset <- exprs(gse)
-fset <- fData(gse)
-
-colnames(fset) #"Symbol" 또는 "Gene Symbol"가 있는지 확인
-rownames(eset) <- fset[,"Gene Symbol"]
-
-# sample selection 
-pset <- phenoData(gse)
-View(pset@data)
+# sample selection
+View(pheno)
 
 # tissue:ch1, source_name_ch1
-sample_select <- pset@data %>% 
+# sample_select <- pset@data %>% 
+#   filter(str_detect(characteristics_ch1, "HCC")) %>% 
+#   pull(`source_name_ch1`)
+grp <- pheno %>% 
   # filter(str_detect(characteristics_ch1, "HCC")) %>% 
-  pull(`source_name_ch1`)
-grp <- pset@data %>% 
-  # filter(str_detect(characteristics_ch1, "HCC")) %>% 
-  pull(`source_name_ch1`) %>% 
+  pull(`characteristics_ch1`) %>% 
   lapply(X = ., FUN = tolower) %>% 
   unlist() %>% 
   as.factor()
 
-# eset <- eset[, sample_select]
-
-
 # duplicate remove probe / gene
-probe_MAD <- apply(eset,1,mad) %>% 
-  tibble(id = seq(length(.)), gene_name = names(.), MAD = .) %>% 
+gene_name <- geneExpression$GeneSymbol
+sample_name <- colnames(geneExpression)[1:(length(colnames(geneExpression)) - 1)]
+probe_MAD <- geneExpression %>% 
+  select(-GeneSymbol) %>% 
+  as.matrix() %>% 
+  apply(.,1,mad) %>% 
+  tibble(id = seq(length(.)), gene_name = gene_name, MAD = .) %>% 
   arrange(desc(MAD))
 probe_MAD_dup <- probe_MAD[which(!duplicated(probe_MAD$gene_name)),] %>% 
   filter(gene_name != "") %>% 
   arrange(id)
-eset <- eset[probe_MAD_dup$id, ]
+geneExpression <- geneExpression[probe_MAD_dup$id, ]
+
+geneExpression_dup <- geneExpression %>% 
+  select(-GeneSymbol) %>% 
+  as.matrix()
+rownames(geneExpression_dup) <- geneExpression$GeneSymbol
+colnames(geneExpression_dup) <- colnames(geneExpression)[1:(length(geneExpression) - 1)]
 
 # Limma
 grp %>% unique()

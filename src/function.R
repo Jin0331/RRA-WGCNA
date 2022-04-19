@@ -259,6 +259,20 @@ rcurl_request <- function(service_url, parameters) {
   return(new)
 }
 
+# limma
+run_limma <- function(ge, de){
+  fit <- lmFit(ge,de)
+  cont <- makeContrasts(TP-NT,levels=de) # 데이터에 맞추어 manual로 설정해야 됨
+  fit.cont <- contrasts.fit(fit,cont)
+  fit.cont <- eBayes(fit.cont)
+  res <- topTable(fit.cont,number=Inf) 
+  target <- res[res$P.Value <0.05,] %>% 
+    rownames_to_column() %>% as_tibble()
+  
+  return(target)
+}
+
+
 biodbnet_db2db <- function(id){
   base_url <- "https://biodbnet-abcc.ncifcrf.gov/webServices/rest.php/"
   json_url <- paste0(base_url, "biodbnetRestApi.json?")

@@ -1,3 +1,12 @@
+# library ----
+library(GEOquery)
+library(limma)
+library(WGCNA)
+library(RobustRankAggreg)
+library(pheatmap)
+library(tidyverse)
+
+# function ----
 #' Function that returns numeric values with 2 decimal numbers.
 #' 
 #' @param x input numeric value with N decimal numbers.
@@ -8,15 +17,39 @@ dec_two <- function(x) {
   return (format(round(x, 2), nsmall = 2));
 }
 
-symbol_mapping <- function(ge, col_name){
-  tmp <- rownames(gene_expression) %>%
-    # .[2:length(rownames(gene_expression))] %>% 
+symbol_mapping <- function(ge, col_name, platform_ann_df){
+  thisGene <- rownames(ge) %>%
     lapply(FUN = function(value){
       platform_ann_df %>% 
         dplyr::filter(ID == value) %>% 
         pull(col_name)
     }) %>% 
-    do.call(c, .) %>% return()
+    do.call(c, .)
+  
+  if(col_name != "gene_assignment"){
+    
+    return(thisGene)
+    
+  } else { # gene assignment
+    
+    SIZE_SPLIT_STRING <- 2
+    GENE_SYMBOL_INDEX <- 2
+    
+    thisGene %>% 
+      lapply(X = ., FUN = function(value){
+        split_string <- strsplit(value, "//")
+        if (length(split_string[[1]]) >= SIZE_SPLIT_STRING) {
+          thisGeneSymbol_temp <- NULL
+          thisGeneSymbol  <- NULL
+          thisGeneSymbol_temp <- split_string[[1]][GENE_SYMBOL_INDEX]
+          thisGeneSymbol <- gsub(" ", "", thisGeneSymbol_temp, fixed = TRUE)
+          thisGeneSymbol %>% return()
+        } else {
+          value %>% return()
+        }
+      }) %>% do.call(c, .) %>% 
+      return()
+  }
 }
 
 #' Function that reads in a URL to check and verifies if it exists (function taken from https://stackoverflow.com/a/12195574 )
@@ -149,36 +182,16 @@ getGeneExpressionFromGEO <- function(datasetGeoCode, retrieveGeneSymbols, verbos
         FIRST_GENE_EXPRESSION_INDEX <- 2
         
         if (verbose == TRUE)    
-          cat("\n[start] loop for the association of the gene symbols to the probeset ID's: completed \n", sep="")
-        # we start from 2 because 1 is the label
-        # for(k in FIRST_GENE_EXPRESSION_INDEX:nrow(gene_expression)) {
-        #   
-        #   currentCompletionPerc <- k*100 / nrow(gene_expression)
-        #   kForPrint <- 1000
-        #   if (verbose == TRUE) if ((k %% kForPrint)==0) { 
-        #     cat(dec_two(currentCompletionPerc), "% ", sep="") 
-        #   }
-        #   
-        #   if(thisGEOplatform %in% platformsWithGeneSpaceSymbolField) 
-        #     thisSymbol <- platform_ann_df[platform_ann_df$ID==rownames(gene_expression[k,]),]$"Gene Symbol"
-        #   if(thisGEOplatform %in% platformsWithGene_SymbolField) 
-        #     thisSymbol <- platform_ann_df[platform_ann_df$ID==rownames(gene_expression[k,]),]$"GeneSymbol"
-        #   if(thisGEOplatform %in% platformsWithSymbolField) 
-        #     thisSymbol <- platform_ann_df[platform_ann_df$ID==rownames(gene_expression[k,]),]$"Symbol"
-        #   if(thisGEOplatform %in% platformsWith_GENE_SYMBOL_Field) 
-        #     thisSymbol <- platform_ann_df[platform_ann_df$ID==rownames(gene_expression[k,]),]$"GENE_SYMBOL"
-        #   
-        #   gene_expression[k,]$GeneSymbol <- thisSymbol
-        # } #  for
+          cat("\n[start] loop for the association of the gene symbols to the probeset ID's\n", sep="")
         
         if(thisGEOplatform %in% platformsWithGeneSpaceSymbolField)
-          thisSymbol <- symbol_mapping(ge = gene_expression, col_name = "Gene Symbol")
+          thisSymbol <- symbol_mapping(ge = gene_expression, col_name = "Gene Symbol", platform_ann_df = platform_ann_df)
         if(thisGEOplatform %in% platformsWithGene_SymbolField)
-          thisSymbol <- symbol_mapping(ge = gene_expression, col_name = "GeneSymbol")
+          thisSymbol <- symbol_mapping(ge = gene_expression, col_name = "GeneSymbol", platform_ann_df = platform_ann_df)
         if(thisGEOplatform %in% platformsWithSymbolField)
-          thisSymbol <- symbol_mapping(ge = gene_expression, col_name = "Symbol")
+          thisSymbol <- symbol_mapping(ge = gene_expression, col_name = "Symbol", platform_ann_df = platform_ann_df)
         if(thisGEOplatform %in% platformsWith_GENE_SYMBOL_Field)
-          thisSymbol <- symbol_mapping(ge = gene_expression, col_name = "GENE_SYMBOL")
+          thisSymbol <- symbol_mapping(ge = gene_expression, col_name = "GENE_SYMBOL", platform_ann_df = platform_ann_df)
         
         gene_expression$GeneSymbol <- thisSymbol
         
@@ -187,44 +200,11 @@ getGeneExpressionFromGEO <- function(datasetGeoCode, retrieveGeneSymbols, verbos
         
       }  else if(thisGEOplatform %in% platformsWithGene_assignmentField) {            # if assignment  
         
+        thisSymbol <- symbol_mapping(ge = gene_expression, col_name = "gene_assignment", platform_ann_df = platform_ann_df)
+        gene_expression$GeneSymbol <- thisSymbol
         
-        FIRST_GENE_EXPRESSION_INDEX <- 2
-        SIZE_SPLIT_STRING <- 2
-        GENE_SYMBOL_INDEX <- 2
-        
-        if (verbose == TRUE)  cat("\n[start] loop for the association of the gene symbols to the probeset ID's: completed ", sep="")
-        
-        # we start from 2 because 1 is the label
-        for(k in FIRST_GENE_EXPRESSION_INDEX:nrow(gene_expression)) {
-          
-          currentCompletionPerc <- k*100 / nrow(gene_expression)
-          kForPrint <- 1000
-          if (verbose == TRUE) if ((k %% kForPrint)==0) { 
-            cat(dec_two(currentCompletionPerc), "%  ", sep="") 
-          }
-          
-          thisAssignment <- NULL
-          thisProbesetID <- NULL
-          thisProbesetID <- rownames(gene_expression[k,])
-          # cat("this probeset ID: ", thisProbesetID, "\t", sep="" )
-          thisAssignment <- platform_ann_df[platform_ann_df$ID==thisProbesetID, ]$"gene_assignment"
-          
-          split_string <- strsplit(thisAssignment, "//")
-          
-          if (length(split_string[[1]]) >= SIZE_SPLIT_STRING) {
-            thisGeneSymbol_temp <- NULL
-            thisGeneSymbol  <- NULL
-            thisGeneSymbol_temp <- split_string[[1]][GENE_SYMBOL_INDEX]
-            thisGeneSymbol <- gsub(" ", "", thisGeneSymbol_temp, fixed = TRUE)        
-            #  cat("\t this gene symbol: ", thisGeneSymbol, "\n", sep="")
-            
-            gene_expression[k,]$GeneSymbol <- thisGeneSymbol
-            
-          } else {
-            
-            gene_expression[k,]$GeneSymbol <- thisAssignment
-            
-          }
+        if (verbose == TRUE)  
+          cat("\n[start] loop for the association of the gene symbols to the probeset ID's: completed ", sep="")
         }
         if (verbose == TRUE) cat("\n [end] loop for the association of the gene symbols to the probeset ID's ", sep="")                
       } else {
@@ -260,7 +240,7 @@ getGeneExpressionFromGEO <- function(datasetGeoCode, retrieveGeneSymbols, verbos
     
     return(list(gene_expression = geneExpression_dup , 
                 pheno = phenoData(gset)))
-  }
+  
 }   
 
 rcurl_request <- function(service_url, parameters) {

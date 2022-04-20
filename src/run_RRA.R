@@ -6,8 +6,10 @@ library(tidyverse)
 source("src/function.R")
 
 # load
-load("~/WORK/GEO/GEO_integrated.RData")
-rra_result <- rra_extract(m_list = multiple_limma)
+load("~/WORK/GEO/RData/GEO_integrated.RData")
+rra_result <- rra_extract(m_list = multiple_limma, 
+                          fdr = 0.0
+                          )
 
 combine_degs_rra <- rra_result[[1]] %>% 
   filter(GENE %in% c(rra_result[[2]] %>% pull(1) %>% .[1:20],

@@ -128,7 +128,7 @@ getGeneExpressionFromGEO <- function(datasetGeoCode, retrieveGeneSymbols, verbos
       platformsWithGene_SymbolField <- c("GPL20115")
       
       # "symbol"
-      platformsWithSymbolField <- c("GPL1293", "GPL6102", "GPL6104", "GPL6883", "GPL6884")
+      platformsWithSymbolField <- c("GPL1293", "GPL6102", "GPL6104", "GPL6883", "GPL6884", "GPL10558")
       
       # "GENE_SYMBOL
       platformsWith_GENE_SYMBOL_Field <- c("GPL13497", "GPL14550", "GPL17077", "GPL6480")
@@ -147,10 +147,14 @@ getGeneExpressionFromGEO <- function(datasetGeoCode, retrieveGeneSymbols, verbos
           kForPrint <- 1000
           if (verbose == TRUE) if ((k %% kForPrint)==0) { cat(dec_two(currentCompletionPerc), "% ", sep="") }
           
-          if(thisGEOplatform %in% platformsWithGeneSpaceSymbolField) thisSymbol <- platform_ann_df[platform_ann_df$ID==rownames(gene_expression[k,]),]$"Gene Symbol"
-          if(thisGEOplatform %in% platformsWithGene_SymbolField) thisSymbol <- platform_ann_df[platform_ann_df$ID==rownames(gene_expression[k,]),]$"gene_symbol"
-          if(thisGEOplatform %in% platformsWithSymbolField) thisSymbol <- platform_ann_df[platform_ann_df$ID==rownames(gene_expression[k,]),]$"symbol"
-          if(thisGEOplatform %in% platformsWith_GENE_SYMBOL_Field) thisSymbol <- platform_ann_df[platform_ann_df$ID==rownames(gene_expression[k,]),]$"GENE_SYMBOL"
+          if(thisGEOplatform %in% platformsWithGeneSpaceSymbolField) 
+            thisSymbol <- platform_ann_df[platform_ann_df$ID==rownames(gene_expression[k,]),]$"Gene Symbol"
+          if(thisGEOplatform %in% platformsWithGene_SymbolField) 
+            thisSymbol <- platform_ann_df[platform_ann_df$ID==rownames(gene_expression[k,]),]$"GeneSymbol"
+          if(thisGEOplatform %in% platformsWithSymbolField) 
+            thisSymbol <- platform_ann_df[platform_ann_df$ID==rownames(gene_expression[k,]),]$"Symbol"
+          if(thisGEOplatform %in% platformsWith_GENE_SYMBOL_Field) 
+            thisSymbol <- platform_ann_df[platform_ann_df$ID==rownames(gene_expression[k,]),]$"GENE_SYMBOL"
           
           gene_expression[k,]$GeneSymbol <- thisSymbol
           

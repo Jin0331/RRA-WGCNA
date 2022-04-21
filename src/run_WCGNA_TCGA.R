@@ -62,6 +62,12 @@ run_deseq_normal <- function(pr_name, rdata_path, deg_path, batch_removal){
       t() %>% 
       as.data.frame()
     
+    # split rowname
+    rownames(robustdeg_ge) <- rownames(robustdeg_ge) %>% as_tibble() %>% 
+      separate(col = value, into = c("A","B","C","D")) %>% 
+      unite(col = id, sep = "-") %>% pull(1) %>% 
+      gsub('.{1}$', '', .)
+    
     # sample & gene filtering
     gsg <- goodSamplesGenes(robustdeg_ge, verbose = 3)
     if (!gsg$allOK){
@@ -129,21 +135,51 @@ run_deseq_normal <- function(pr_name, rdata_path, deg_path, batch_removal){
                                  delim = "\t")
     write_delim(clinical_trait, file = "TCGA-LIHC_Clinical_TCGAibolinks.txt", delim = "\t")
     
-    expression_sample <- rownames(robustdeg_ge) %>% as_tibble() %>% 
-      separate(col = value, into = c("A","B","C","D")) %>% 
-      unite(col = id, sep = "-") %>% pull(1) %>% 
-      gsub('.{1}$', '', .)
-    
-    traitRows <- match(expression_sample, clinical_trait$sampleID)
-    data_trait <- clinical_trait[traitRows, ]
-    data_trait %>% select(sample_type)
-    
-    rownames(data_trait) <- clinical_trait[traitRows, 3]
-    
     expression_sample <- rownames(robustdeg_ge)
-    traitRows = match(expression_sample, clinical_trait$Affy_GSM)
-    data_trait <- clinical_trait[traitRows, -3]
-    rownames(data_trait) <- clinical_trait[traitRows, 3]
+    traitRows <- match(expression_sample, clinical_trait$sampleID)
+    data_trait <- clinical_trait[traitRows, ] %>% 
+      column_to_rownames(var = "sampleID") %>% 
+      select(sample_type, age_at_initial_pathologic_diagnosis, pathologic_T, pathologic_M, pathologic_N,
+             pathologic_stage, child_pugh_classification_grade, fibrosis_ishak_score) %>% 
+      mutate_all(as.factor) %>% 
+      mutate_all(as.numeric)
+    data_trait[is.na(data_trait)] <- 0
+    # write_delim(data_trait, file = "TCGA-LIHC_Clinical_impute0.txt", delim = "\t")
+    
+    
+    # relating modules to external clinical traits ----
+    nGenes <- ncol(robustdeg_ge)
+    nSamples <- nrow(robustdeg_ge)
+    MEs0 <- moduleEigengenes(robustdeg_ge, moduleColors)$eigengenes
+    MEs <- orderMEs(MEs0)
+    
+    
+    # trait cor
+    moduleTraitCor <-  WGCNA::cor(MEs, data_trait, use = "p")
+    moduleTraitPvalue <-  corPvalueStudent(moduleTraitCor, nSamples)
+    
+    # plot
+    {
+      sizeGrWindow(10,6)
+      # Will display correlations and their p-values
+      textMatrix = paste(signif(moduleTraitCor, 2), "\n(",
+                         signif(moduleTraitPvalue, 1), ")", sep = "");
+      dim(textMatrix) = dim(moduleTraitCor)
+      par(mar = c(6, 8.5, 3, 3));
+      # Display the correlation values within a heatmap plot
+      labeledHeatmap(Matrix = moduleTraitCor,
+                     xLabels = names(data_trait),
+                     yLabels = names(MEs),
+                     ySymbols = names(MEs),
+                     colorLabels = FALSE,
+                     colors = greenWhiteRed(50),
+                     textMatrix = textMatrix,
+                     setStdMargins = FALSE,
+                     cex.text = 0.5,
+                     zlim = c(-1,1),
+                     main = paste("Module-trait relationships"))
+    }
+
   })  
   
   return(tcga_deseq_result_tidy)

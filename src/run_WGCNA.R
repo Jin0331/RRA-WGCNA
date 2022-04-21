@@ -75,6 +75,11 @@ clinical_trait <- read_delim(file = "RData/GSE14520_Extra_Supplement.txt", delim
   as.data.frame()
 
 expression_sample <- rownames(robustdeg_ge)
+
+expression_sample[1] %>% strsplit(x = ., split = "-")
+
+
+
 traitRows = match(expression_sample, clinical_trait$Affy_GSM)
 data_trait <- clinical_trait[traitRows, -3]
 rownames(data_trait) <- clinical_trait[traitRows, 3]

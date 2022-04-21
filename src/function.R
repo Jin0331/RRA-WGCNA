@@ -113,9 +113,21 @@ getGeneExpressionFromGEO <- function(datasetGeoCode, retrieveGeneSymbols, verbos
   
   GSE_code <- datasetGeoCode
   
+  
+  # r <- NULL
+  # attempt <- 1
+  # while( is.null(r) && attempt <= 3 ) {
+  #   attempt <- attempt + 1
+  #   try(
+  #     r <- some_function_that_may_fail()
+  #   )
+  # } 
+  
   # check   URL
   checked_html_text <- "EMPTY_STRING"
-  checked_html_text <- xml2::read_html("https://ftp.ncbi.nlm.nih.gov/geo/series/")
+  checked_html_text <- retry(expr =  xml2::read_html("https://ftp.ncbi.nlm.nih.gov/geo/series/"),
+                             maxErrors=10, 
+                             sleep=2)
   
   checked_html_text_url <- "EMPTY_STRING"
   url_to_check <- paste0("https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=", datasetGeoCode)
@@ -125,6 +137,9 @@ getGeneExpressionFromGEO <- function(datasetGeoCode, retrieveGeneSymbols, verbos
   complete_url <- paste0("https://ftp.ncbi.nlm.nih.gov/geo/series/", GSE_code_for_url, "/", GSE_code)
   
   checked_html_text_url <- lapply(complete_url, readUrl)
+
+  
+
   #             
   if(all(checked_html_text == "EMPTY_STRING")) {
     
@@ -138,11 +153,12 @@ getGeneExpressionFromGEO <- function(datasetGeoCode, retrieveGeneSymbols, verbos
     
   } else {
     
-    gset <- GEOquery::getGEO(GSE_code,  GSEMatrix =TRUE, getGPL=FALSE)
+    gset <- retry(expr = GEOquery::getGEO(GSE_code,  GSEMatrix =TRUE, getGPL=FALSE), maxErrors = 10, sleep = 2)
     
     thisGEOplatform <- toString((gset)[[1]]@annotation)
     
-    if (length(gset) > 1) idx <- grep(thisGEOplatform, attr(gset, "names")) else idx <- 1
+    if (length(gset) > 1) 
+      idx <- grep(thisGEOplatform, attr(gset, "names")) else idx <- 1
     gset <- gset[[idx]]
     gene_expression <- as.data.frame(Biobase::exprs(gset))
     
@@ -152,7 +168,7 @@ getGeneExpressionFromGEO <- function(datasetGeoCode, retrieveGeneSymbols, verbos
       
       
       # we retrieve the platform details
-      platform_ann <- annotate::readGEOAnn(GEOAccNum = thisGEOplatform)
+      platform_ann <- retry(expr = annotate::readGEOAnn(GEOAccNum = thisGEOplatform), maxErrors = 10, sleep = 2)
       platform_ann_df <- as.data.frame(platform_ann, stringsAsFactors=FALSE)
       
       if (verbose == TRUE) {
@@ -161,13 +177,16 @@ getGeneExpressionFromGEO <- function(datasetGeoCode, retrieveGeneSymbols, verbos
       }
       
       # "gene_assignment
-      platformsWithGene_assignmentField <- c("GPL11532", "GPL23126", "GPL6244", "GPL17586")
+      platformsWithGene_assignmentField <- c("GPL11532", "GPL23126", "GPL6244", "GPL17586", "GPL5175")
       
       # "Gene Symbol"
       platformsWithGeneSpaceSymbolField <- c("GPL80", "GPL8300", "GPL80", "GPL96", "GPL570", "GPL571", "GPL3921")
       
       # "gene_symbol"
       platformsWithGene_SymbolField <- c("GPL20115")
+      
+      # "HUGOname"
+      platformsWithHUGOnamelField <- c("GPL5918")
       
       # "symbol"
       platformsWithSymbolField <- c("GPL1293", "GPL6102", "GPL6104", "GPL6883", "GPL6884", "GPL10558")
@@ -176,7 +195,7 @@ getGeneExpressionFromGEO <- function(datasetGeoCode, retrieveGeneSymbols, verbos
       platformsWith_GENE_SYMBOL_Field <- c("GPL13497", "GPL14550", "GPL17077", "GPL6480")
       
       # if symbol
-      if(thisGEOplatform %in% c(platformsWithGeneSpaceSymbolField, platformsWithGene_SymbolField, platformsWithSymbolField, platformsWith_GENE_SYMBOL_Field)   ) {
+      if(thisGEOplatform %in% c(platformsWithHUGOnamelField, platformsWithGene_assignmentField, platformsWithGeneSpaceSymbolField, platformsWithGene_SymbolField, platformsWithSymbolField, platformsWith_GENE_SYMBOL_Field)   ) {
         
         emptyGeneSymbol <- ""
         FIRST_GENE_EXPRESSION_INDEX <- 2
@@ -192,27 +211,21 @@ getGeneExpressionFromGEO <- function(datasetGeoCode, retrieveGeneSymbols, verbos
           thisSymbol <- symbol_mapping(ge = gene_expression, col_name = "Symbol", platform_ann_df = platform_ann_df)
         if(thisGEOplatform %in% platformsWith_GENE_SYMBOL_Field)
           thisSymbol <- symbol_mapping(ge = gene_expression, col_name = "GENE_SYMBOL", platform_ann_df = platform_ann_df)
-        
+        if(thisGEOplatform %in% platformsWithGene_assignmentField)
+          thisSymbol <- symbol_mapping(ge = gene_expression, col_name = "gene_assignment", platform_ann_df = platform_ann_df)
+        if(thisGEOplatform %in% platformsWithHUGOnamelField)
+          thisSymbol <- symbol_mapping(ge = gene_expression, col_name = "HUGOname", platform_ann_df = platform_ann_df)
         gene_expression$GeneSymbol <- thisSymbol
         
         if (verbose == TRUE) 
           cat("\n [end] loop for the association of the gene symbols to the probeset ID's \n ", sep="")
         
-      }  else if(thisGEOplatform %in% platformsWithGene_assignmentField) {            # if assignment  
-        
-        thisSymbol <- symbol_mapping(ge = gene_expression, col_name = "gene_assignment", platform_ann_df = platform_ann_df)
-        gene_expression$GeneSymbol <- thisSymbol
-        
-        if (verbose == TRUE)  
-          cat("\n[start] loop for the association of the gene symbols to the probeset ID's: completed ", sep="")
-        }
-        if (verbose == TRUE) cat("\n [end] loop for the association of the gene symbols to the probeset ID's ", sep="")                
-      } else {
-        
-        if (verbose == TRUE) cat("\n\n[Impossible to perform gene symbol retrieval]\n")
-        if (verbose == TRUE) cat("We're sorry but the indicated platform (", thisGEOplatform, ") is not among the platforms included in this function.\nThe gene symbol retrieval cannot be performed.\nPlease visit the https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=", thisGEOplatform, " website for more information about this platform.\n\n", sep="")
+      }  else{
+        if (verbose == TRUE) 
+          cat("\n\n[Impossible to perform gene symbol retrieval]\n")
+        if (verbose == TRUE) 
+          cat("We're sorry but the indicated platform (", thisGEOplatform, ") is not among the platforms included in this function.\nThe gene symbol retrieval cannot be performed.\nPlease visit the https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=", thisGEOplatform, " website for more information about this platform.\n\n", sep="")
         gene_expression$GeneSymbol <- NULL
-        
       }
       
     }
@@ -241,7 +254,7 @@ getGeneExpressionFromGEO <- function(datasetGeoCode, retrieveGeneSymbols, verbos
     return(list(gene_expression = geneExpression_dup , 
                 pheno = phenoData(gset)))
   
-}   
+}   }
 
 rcurl_request <- function(service_url, parameters) {
   # Collapse all parameters into one string
@@ -354,7 +367,24 @@ rra_extract <- function(m_list, logfc = 0.0, fdr = 0.05){
     return()
 }
 
-
-
-# geneExpressionDF1 <- getGeneExpressionFromGEO("GSE60502", TRUE, FALSE)
+retry <- function(expr, isError=function(x) "try-error" %in% class(x), maxErrors=5, sleep=0) {
+  attempts = 0
+  retval = try(eval(expr))
+  while (isError(retval)) {
+    attempts = attempts + 1
+    if (attempts >= maxErrors) {
+      msg = sprintf("retry: too many retries [[%s]]", capture.output(str(retval)))
+      flog.fatal(msg)
+      stop(msg)
+    } else {
+      msg = sprintf("retry: error in attempt %i/%i [[%s]]", attempts, maxErrors, 
+                    capture.output(str(retval)))
+      flog.error(msg)
+      warning(msg)
+    }
+    if (sleep > 0) Sys.sleep(sleep)
+    retval = try(eval(expr))
+  }
+  return(retval)
+}
 

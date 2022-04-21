@@ -8,20 +8,32 @@ source("src/function.R")
 
 # 1 - gene expression, 2 - phenotype
 multiple_limma <- list()
-gse_name <- "GSE57957"
-gse_data <- getGeneExpressionFromGEO(datasetGeoCode = gse_name, 
-                                           retrieveGeneSymbols = TRUE, 
-                                           verbose = TRUE)
-save(gse_data, file = paste0("GSE/", gse_name, ".RData"))
+gse_name <- "GSE14520"
 
+# file load
+if(file.exists(paste0("GSE/", gse_name, ".RData"))){
+  load(file = paste0("GSE/", gse_name, ".RData"))
+} else {
+  gse_data <- getGeneExpressionFromGEO(datasetGeoCode = gse_name, 
+                                       retrieveGeneSymbols = TRUE, 
+                                       verbose = TRUE)
+  save(gse_data, file = paste0("GSE/", gse_name, ".RData"))
+}
 
 geneExpression <- gse_data$gene_expression
+hist(geneExpression)
+# geneExpression <- log2(geneExpression)
+# hist(geneExpression)
+
 pheno <- gse_data$pheno@data
 
 # sample selection
 View(pheno)
 grp <- pheno %>% 
-  pull(`description`) %>% 
+  # filter(str_detect(`source_name_ch1`, "HCC")) %>%
+  pull(`characteristics_ch1`) %>%
+  # pull(`characteristics_ch1.1`) %>%
+  # pull(`source_name_ch1`) %>%
   lapply(X = ., FUN = tolower) %>% 
   unlist() %>% 
   as.factor()
@@ -33,6 +45,7 @@ colnames(design) <- c("NT","TP") # 데이터에 맞추어 manual로 설정해야
 
 # Limma
 multiple_limma[[gse_name]] <- run_limma(ge = geneExpression, de = design)
+multiple_limma[[gse_name]] %>% View()
 
 # save
-save(multiple_limma, file = "GEO_integrated.RData")
+save(multiple_limma, file = "RData/HCC_GEO_integrated_norm.RData")

@@ -6,14 +6,16 @@ library(tidyverse)
 source("src/function.R")
 
 # load
-load("~/WORK/GEO/RData/GEO_integrated.RData")
-rra_result <- rra_extract(m_list = multiple_limma, 
-                          fdr = 0.0
-                          )
+load("~/WORK/GEO/RData/HCC_GEO_integrated_norm.RData")
+rra_result <- rra_extract(m_list = multiple_limma)
 
 combine_degs_rra <- rra_result[[1]] %>% 
   filter(GENE %in% c(rra_result[[2]] %>% pull(1) %>% .[1:20],
                      rra_result[[3]] %>% pull(1) %>% .[1:20]))
+
+rra_result[[2]] %>% nrow() # up-regulated
+rra_result[[3]] %>% nrow() # dwon-regulated
+
 up_down_rra_gene <- bind_rows(rra_result[[2]], rra_result[[3]])
 
 # heatmap
@@ -32,4 +34,6 @@ pheatmap(combine_degs_m,
          cellheight = 10
          )
 # save
-save(up_down_rra_gene, file = "RobustDEGs.RData")
+save(up_down_rra_gene, file = paste0("RData/","HCC_GEO_RobustDEGs_norm.RData"))
+
+     

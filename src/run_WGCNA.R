@@ -6,15 +6,20 @@ library(tidyverse)
 source("src/function.R")
 
 # load data
-load(file = "RData/RobustDEGs.RData")
+load(file = "RData/HCC_GEO_RobustDEGs_norm.RData")
 robustdegs <- up_down_rra_gene %>% pull(1)
 
 # base data
 gse_name <- "GSE14520"
-gse_data <- getGeneExpressionFromGEO(datasetGeoCode = gse_name, 
-                                     retrieveGeneSymbols = TRUE, 
-                                     verbose = TRUE)
-save(gse_data, file = paste0("GSE/", gse_name, ".RData"))
+
+if(file.exists(paste0("GSE/", gse_name,".RData"))){
+  load(paste0("GSE/", gse_name,".RData"))
+} else {
+  gse_data <- getGeneExpressionFromGEO(datasetGeoCode = gse_name, 
+                                       retrieveGeneSymbols = TRUE, 
+                                       verbose = TRUE)
+  save(gse_data, file = paste0("GSE/", gse_name, ".RData"))
+}
 
 geneExpression <- gse_data$gene_expression
 pheno <- gse_data$pheno@data
@@ -100,26 +105,58 @@ sft <- pickSoftThreshold(robustdeg_ge, powerVector = powers, verbose = 5)
   
 }
 
-softPower <-  7 #Chosen in the graphs before
+softPower <-  9 #Chosen in the graphs before
 net <- blockwiseModules(datExpr = robustdeg_ge, 
                         power = softPower,
                        # corType = "pearson", 
                        TOMType = "unsigned", 
                        minModuleSize = 30,
                        reassignThreshold = 0, 
-                       mergeCutHeight = 0.15,
+                       mergeCutHeight = 0.2,
                        numericLabels = TRUE, 
                        pamRespectsDendro = FALSE,
                        saveTOMs = TRUE,
                        saveTOMFileBase = "GSE14520",
                        verbose = 3)
 
+sizeGrWindow(12, 9)
+# Convert labels to colors for plotting
+mergedColors <- labels2colors(net$colors)
+# Plot the dendrogram and the module colors underneath
+plotDendroAndColors(net$dendrograms[[1]], mergedColors[net$blockGenes[[1]]],
+                    "Module colors",
+                    dendroLabels = FALSE, hang = 0.03,
+                    addGuide = TRUE, guideHang = 0.05)
+
 moduleLabels <- net$colors
-moduleColors %>% unique()
-moduleColors <- labels2colors(net$colors)
+moduleColors <-  labels2colors(net$colors)
+MEs <- net$MEs;
+geneTree <- net$dendrograms[[1]]
 
-
-
+# relating modules to external clinical traits ----
 nGenes <- ncol(robustdeg_ge)
 nSamples <- nrow(robustdeg_ge)
-MEs0 = moduleEigengenes(robustdeg_ge, moduleColors)$eigengenes
+MEs0 <- moduleEigengenes(robustdeg_ge, moduleColors)$eigengenes
+MEs <- orderMEs(MEs0)
+
+moduleTraitCor <-  WGCNA::cor(MEs, data_trait, use = 'pairwise.complete.obs')
+moduleTraitPvalue <-  corPvalueStudent(moduleTraitCor, nSamples)
+
+sizeGrWindow(10,6)
+# Will display correlations and their p-values
+textMatrix = paste(signif(moduleTraitCor, 2), "\n(",
+                   signif(moduleTraitPvalue, 1), ")", sep = "");
+dim(textMatrix) = dim(moduleTraitCor)
+par(mar = c(6, 8.5, 3, 3));
+# Display the correlation values within a heatmap plot
+labeledHeatmap(Matrix = moduleTraitCor,
+               xLabels = names(data_trait),
+               yLabels = names(MEs),
+               ySymbols = names(MEs),
+               colorLabels = FALSE,
+               colors = greenWhiteRed(50),
+               textMatrix = textMatrix,
+               setStdMargins = FALSE,
+               cex.text = 0.5,
+               zlim = c(-1,1),
+               main = paste("Module-trait relationships"))

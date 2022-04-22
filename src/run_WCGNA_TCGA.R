@@ -113,7 +113,8 @@ run_deseq_normal <- function(pr_name, rdata_path, deg_path, batch_removal){
     clinical_trait <- read_delim("https://tcga-xena-hub.s3.us-east-1.amazonaws.com/download/TCGA.LIHC.sampleMap%2FLIHC_clinicalMatrix",
                                  delim = "\t")
     survival_trait <- read_delim("https://tcga-xena-hub.s3.us-east-1.amazonaws.com/download/survival%2FLIHC_survival.txt",
-                                 delim = "\t")
+                                 delim = "\t") %>% 
+      select(sample, OS, OS.time, DSS, DSS.time, DFI, DFI.time, PFI, PFI.time)
     
     clinical_trait <- left_join(x = clinical_trait, y = survival_trait, by = c("sampleID" = "sample"))
     
@@ -123,10 +124,10 @@ run_deseq_normal <- function(pr_name, rdata_path, deg_path, batch_removal){
     traitRows <- match(expression_sample, clinical_trait$sampleID)
     data_trait <- clinical_trait[traitRows, ] %>% 
       column_to_rownames(var = "sampleID") %>% 
-      select(sample_type, OS, DSS, DFI, PFI, age_at_initial_pathologic_diagnosis, 
+      select(sample_type, OS, OS.time, DSS, DSS.time, DFI, DFI.time, PFI, PFI.time,age_at_initial_pathologic_diagnosis, 
              pathologic_T, pathologic_M, pathologic_N, pathologic_stage, child_pugh_classification_grade, 
              fibrosis_ishak_score) %>% 
-      mutate_all(as.factor) %>% 
+      mutate_if(is.character, as.factor) %>% 
       mutate_all(as.numeric)
     data_trait[is.na(data_trait)] <- 0
     # write_delim(data_trait, file = "TCGA-LIHC_Clinical_impute0.txt", delim = "\t")

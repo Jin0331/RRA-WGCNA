@@ -5,6 +5,7 @@ library(WGCNA)
 rdata_path <- "RData/"
 load(file = "RData/HCC_GEO_RobustDEGs_norm.RData")
 robustdegs <- up_down_rra_gene %>% pull(1)
+pr_name <- "LIHC"
 
 run_deseq_normal <- function(pr_name, rdata_path, deg_path, batch_removal){
   register(MulticoreParam(20))
@@ -114,7 +115,7 @@ run_deseq_normal <- function(pr_name, rdata_path, deg_path, batch_removal){
                                  delim = "\t")
     survival_trait <- read_delim("https://tcga-xena-hub.s3.us-east-1.amazonaws.com/download/survival%2FLIHC_survival.txt",
                                  delim = "\t") %>% 
-      select(sample, OS, OS.time, DSS, DSS.time, DFI, DFI.time, PFI, PFI.time)
+      dplyr::select(sample, OS, OS.time, DSS, DSS.time, DFI, DFI.time, PFI, PFI.time)
     
     clinical_trait <- left_join(x = clinical_trait, y = survival_trait, by = c("sampleID" = "sample"))
     
@@ -124,7 +125,7 @@ run_deseq_normal <- function(pr_name, rdata_path, deg_path, batch_removal){
     traitRows <- match(expression_sample, clinical_trait$sampleID)
     data_trait <- clinical_trait[traitRows, ] %>% 
       column_to_rownames(var = "sampleID") %>% 
-      select(sample_type, OS, OS.time, DSS, DSS.time, DFI, DFI.time, PFI, PFI.time,age_at_initial_pathologic_diagnosis, 
+      dplyr::select(sample_type, OS, OS.time, DSS, DSS.time, DFI, DFI.time, PFI, PFI.time,age_at_initial_pathologic_diagnosis, 
              pathologic_T, pathologic_M, pathologic_N, pathologic_stage, child_pugh_classification_grade, 
              fibrosis_ishak_score) %>% 
       mutate_if(is.character, as.factor) %>% 
@@ -143,6 +144,55 @@ run_deseq_normal <- function(pr_name, rdata_path, deg_path, batch_removal){
     moduleTraitCor <-  WGCNA::cor(MEs, data_trait, use = "p")
     moduleTraitPvalue <-  corPvalueStudent(moduleTraitCor, nSamples)
     
+    # top 3 sign. module
+    signModule <- lapply(X = 1:nrow(moduleTraitPvalue), FUN = function(row_index){
+      trait_cnt <- moduleTraitPvalue[row_index, ] %>% .[. < 0.05] %>% length()
+      row_name <- rownames(moduleTraitPvalue)[row_index] %>% 
+        substring(., 3)
+      if(str_detect(row_name, "grey"))
+        return(NULL)
+      else
+        return(tibble(MM = row_name, signTrait = trait_cnt))
+    }) %>% bind_rows() %>% arrange(desc(signTrait)) %>% 
+      pull(1) %>% 
+      .[1:3]
+    
+    
+    ## Gene significance
+    sig_trait <- "sample_type"
+    s_type <- as.data.frame(data_trait$sample_type)
+    names(s_type) <- sig_trait
+    
+    modNames <- substring(names(MEs), 3)
+    geneModuleMembership <- as.data.frame(cor(robustdeg_ge, MEs, use = "p"))
+    MMPvalue <- as.data.frame(corPvalueStudent(as.matrix(geneModuleMembership), nSamples))
+    
+    # module membership
+    names(geneModuleMembership) <- paste("MM", modNames, sep="")
+    names(MMPvalue) <- paste("p.MM", modNames, sep="")
+    
+    geneTraitSignificance <- as.data.frame(cor(robustdeg_ge, s_type, use = "p"))
+    GSPvalue <- as.data.frame(corPvalueStudent(as.matrix(geneTraitSignificance), nSamples))
+    
+    # intramodular analysis
+    # module <- "turquoise"
+    geneGS <- geneTraitSignificance %>% rownames_to_column()
+    geneMM <- geneModuleMembership %>% rownames_to_column()
+    
+    intra_module <- lapply(X = signModule, FUN = function(module){
+      module_name <- paste0("MM", module)
+      moduleGenes <- (moduleColors==module)
+      
+      geneGS_MM <- inner_join(x = geneGS, y = geneMM, by = "rowname") %>%
+        dplyr::select(rowname, starts_with(sig_trait), starts_with(module_name)) %>% 
+        .[moduleGenes,]
+      colnames(geneGS_MM) <- c("GENE", "GS", "MM")
+      
+      geneGS_MM %>% 
+        filter(abs(GS) > 0.3 & abs(MM) > 0.85) %>% 
+        return()
+    })
+    names(intra_module) <- signModule
     
     # collection of plot
     {
@@ -190,7 +240,17 @@ run_deseq_normal <- function(pr_name, rdata_path, deg_path, batch_removal){
                        zlim = c(-1,1),
                        main = paste("Module-trait relationships"))
       }
-      
+      # plot - GS & MM correlation 
+      {
+        sizeGrWindow(7, 7);
+        par(mfrow = c(1,1));
+        verboseScatterplot(abs(geneModuleMembership[moduleGenes, column]),
+                           abs(geneTraitSignificance[moduleGenes, 1]),
+                           xlab = paste("Module Membership in", module, "module"),
+                           ylab = "GS for sample type",
+                           main = paste("Module membership vs. gene significance\n"),
+                           cex.main = 1.2, cex.lab = 1.2, cex.axis = 1.2, col = module)
+      }
     }
   })  
   

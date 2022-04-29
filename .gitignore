@@ -10,3 +10,6 @@ GDCdata/
 *.txt
 *.sqlite*
 .Rproj.user
+RAW_DATA/
+PKL/
+Cytoscape/

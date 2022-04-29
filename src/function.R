@@ -388,3 +388,33 @@ retry <- function(expr, isError=function(x) "try-error" %in% class(x), maxErrors
   return(retval)
 }
 
+#' Function that returns STRING network
+#' @param hub_gene input character vector
+#' @return network dataframe
+#' @examples
+#' aaa <- string_network(hub_gene = my_gene)
+string_network <- function(hub_gene){
+  # URLs
+  string_api_url <- "https://version-11-5.string-db.org/api"
+  output_format <- "tsv-no-header"
+  method <- "network"
+  request_url <- paste(string_api_url, output_format, method, sep = "/")
+  
+  # post payload
+  params <- list(
+    identifiers = paste0(hub_gene, collapse = "%0d"),
+    species = "9606",
+    caller_identity = "www.hallym.ac.kr"
+  )
+  
+  # output
+  network_colname <- c('stringId_A','stringId_B','preferredName_A','preferredName_B','ncbiTaxonId',
+                       'score','nscore','fscore','pscore','ascore','escore','dscore','tscore')
+  
+  ppi_network <- POST(request_url, body = params, encode = "form") %>%  
+    httr::content(encoding = "UTF-8") 
+  colnames(ppi_network) <- network_colname
+  ppi_network <- ppi_network %>% arrange(preferredName_A) %>% distinct_all()
+  
+  return(ppi_network)
+}

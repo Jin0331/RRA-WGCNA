@@ -1,46 +1,49 @@
 library(DESeq2)
 library(impute)
 library(WGCNA)
+library(tidyverse)
+library(TCGAbiolinks)
+library(reticulate)
+
+use_condaenv(condaenv = "multiomics-cpu")
+source_python("src/py-function.py")
 
 rdata_path <- "RData/"
 load(file = "RData/HCC_GEO_RobustDEGs_norm.RData")
 robustdegs <- up_down_rra_gene %>% pull(1)
 pr_name <- "LIHC"
 
+
+
 run_deseq_normal <- function(pr_name, rdata_path, deg_path, batch_removal){
   register(MulticoreParam(20))
   suppressMessages({
-    if((!file.exists(paste0(rdata_path, pr_name, "_normal.RData"))) | 
-       (!file.exists(paste0(rdata_path, pr_name, "_RnaseqSE_normal.RData")))){
-      query <- GDCquery(project = paste0("TCGA-", pr_name), 
-                        data.category = "Gene expression",
-                        data.type = "Gene expression quantification",
-                        experimental.strategy = "RNA-Seq",
-                        platform = "Illumina HiSeq",
-                        file.type = "results",
-                        sample.type = c("Primary Tumor", "Solid Tissue Normal"), 
-                        legacy = TRUE)
-      
-      GDCdownload(query)
-      RnaseqSE <- GDCprepare(query)
-      
-      save(RnaseqSE, file = paste0(rdata_path, pr_name, "_RnaseqSE_normal.RData"))
-      
-      Rnaseq_CorOutliers <- assay(RnaseqSE, "raw_count") # to matrix
-      
-      # normalization of genes, # quantile filter of genes
-      dataNorm <- TCGAanalyze_Normalization(tabDF = Rnaseq_CorOutliers, geneInfo =  geneInfo)
-      dataFilt <- TCGAanalyze_Filtering(tabDF = dataNorm,
-                                        method = "quantile", 
-                                        qnt.cut =  0.25)
-      
-      dataFilt <- varianceStabilizingTransformation(dataFilt)
-      
-      save(dataFilt, file = paste0(rdata_path, pr_name, "_normal.RData"))
-    } else {
-      load(paste0(rdata_path, pr_name, "_RnaseqSE_normal.RData"))
-      load(paste0(rdata_path, pr_name, "_normal.RData"))
-    }
+    
+    # TCGA FPKM
+    cancer_fpkm <- load_tcga_dataset(pkl_path = "PKL/", raw_path = "RAW_DATA/", cancer_type = pr_name) %>% 
+      rownames_to_column(var = "id")
+    
+    gene_probe_mapping <- read_delim(file = "https://toil-xena-hub.s3.us-east-1.amazonaws.com/download/probeMap%2Fgencode.v23.annotation.gene.probemap",
+                                     delim = "\t") %>% 
+      select(id, gene) %>% 
+      inner_join(x = ., y = cancer_fpkm, by = "id") %>% 
+      select(-id)
+    
+    dataFilt <- gene_probe_mapping %>% 
+      mutate_if(is.numeric, .funs = function(value){
+        2^value - 0.001 %>% return()
+      }) %>% 
+      mutate_if(is.numeric, .funs = function(value){
+        ifelse(value < 0, 0, value) %>% return()
+      }) %>% 
+      mutate_if(is.numeric, .funs = function(value){
+        log2(value + 1) %>% return()
+      }) %>% 
+      distinct(gene, .keep_all = TRUE) %>% 
+      column_to_rownames(var = "gene") %>% 
+      as.matrix()
+    
+    
     
     # row to col AND DESeq2 normalized log2(x+1)
     robustdeg_ge <- lapply(X = robustdegs, FUN = function(deg){
@@ -66,8 +69,8 @@ run_deseq_normal <- function(pr_name, rdata_path, deg_path, batch_removal){
     # split rowname
     rownames(robustdeg_ge) <- rownames(robustdeg_ge) %>% as_tibble() %>% 
       separate(col = value, into = c("A","B","C","D")) %>% 
-      unite(col = id, sep = "-") %>% pull(1) %>% 
-      gsub('.{1}$', '', .)
+      unite(col = id, sep = "-") %>% pull(1)
+      # gsub('.{1}$', '', .)
     
     # sample & gene filtering
     gsg <- goodSamplesGenes(robustdeg_ge, verbose = 3)
@@ -89,7 +92,7 @@ run_deseq_normal <- function(pr_name, rdata_path, deg_path, batch_removal){
     
     # net construct
     net <- blockwiseModules(datExpr = robustdeg_ge, 
-                            power = 14,
+                            power = 9,
                             corType = "pearson",
                             TOMType = "unsigned", 
                             minModuleSize = 30,
@@ -118,10 +121,11 @@ run_deseq_normal <- function(pr_name, rdata_path, deg_path, batch_removal){
       dplyr::select(sample, OS, OS.time, DSS, DSS.time, DFI, DFI.time, PFI, PFI.time)
     
     clinical_trait <- left_join(x = clinical_trait, y = survival_trait, by = c("sampleID" = "sample"))
-    
     # write_delim(clinical_trait, file = "TCGA-LIHC_Clinical_TCGAibolinks.txt", delim = "\t")
     
     expression_sample <- rownames(robustdeg_ge)
+    
+    # Factor 
     traitRows <- match(expression_sample, clinical_trait$sampleID)
     data_trait <- clinical_trait[traitRows, ] %>% 
       column_to_rownames(var = "sampleID") %>% 
@@ -132,6 +136,20 @@ run_deseq_normal <- function(pr_name, rdata_path, deg_path, batch_removal){
       mutate_all(as.numeric)
     data_trait[is.na(data_trait)] <- 0
     # write_delim(data_trait, file = "TCGA-LIHC_Clinical_impute0.txt", delim = "\t")
+    
+    # # dummy variable (binary trait)
+    # traitRows <- match(expression_sample, clinical_trait$sampleID)
+    # data_trait <- clinical_trait[traitRows, ] %>%
+    #   column_to_rownames(var = "sampleID") %>%
+    #   dplyr::select(sample_type, OS, OS.time, DSS, DSS.time, DFI, DFI.time, PFI, PFI.time,age_at_initial_pathologic_diagnosis,
+    #                 pathologic_T, pathologic_M, pathologic_N, pathologic_stage, child_pugh_classification_grade,
+    #                 fibrosis_ishak_score)
+    # # mutate_if(is.character, as.factor)
+    # data_trait[is.na(data_trait)] <- 0
+    # ###### using model matrix
+    # data_trait <- model.matrix( ~ child_pugh_classification_grade - 1, data_trait) %>%
+    #   as.data.frame()
+    
     
     
     # relating modules to external clinical traits ----
@@ -193,6 +211,18 @@ run_deseq_normal <- function(pr_name, rdata_path, deg_path, batch_removal){
         return()
     })
     names(intra_module) <- signModule
+    
+    # modules Hub gene
+    intra_analysis_hub <- intra_module %>% 
+      bind_rows() %>% 
+      pull(1)
+    
+    # extramodular analysis
+    extra_analysis_hub <- string_network(hub_gene = intra_analysis_hub) %>% 
+      filter(score > 0.9) 
+    
+    ## cytoscape (?)
+    extra_analysis_hub %>% write_delim(file = "Cytoscape/tophubgene.txt", delim = "\t")
     
     # collection of plot
     {

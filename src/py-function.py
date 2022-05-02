@@ -1,3 +1,4 @@
+# Load module
 import numpy as np
 import os
 import datetime
@@ -5,14 +6,48 @@ from requests import get
 from pathlib import Path
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
-from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.feature_selection import RFECV
+from sklearn.model_selection import RandomizedSearchCV
+from sklearn.model_selection import train_test_split, GridSearchCV, RepeatedStratifiedKFold, StratifiedKFold
 from sklearn.linear_model import Lasso
 from sklearn.impute import KNNImputer
+from sklearn.svm import SVC
 
 
-
-def df_test(X, Y):
+def feature_selection_svm_rfecv(X,Y):
+  # preprocessing
+  features = list(X.columns)
+  X = X.to_numpy()
+  y = Y.to_numpy()
   
+  # train-test split
+  X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.30, random_state=331)
+
+  # model conf.
+  k_fold = StratifiedKFold(n_splits=5, shuffle=True, random_state=331)
+  svc = SVC(kernel = 'linear', probability = True)
+  rfecv = RFECV(estimator=svc, cv=k_fold, scoring='roc_auc')
+  
+  ## search parameter
+  param_grid = {
+  #     'estimator__C': [0.001, 0.01, 0.1, 0.25, 0.5, 0.75, 1.0, 5.0, 7.5, 10],
+  #     'estimator__gamma': [0.001, 0.01, 0.1, 1.0, 2.0, 3.0, 10.0]
+      'estimator__C': np.arange(0.01,100,0.01)
+  }
+  
+  # CV conf.
+  CV_rfc = RandomizedSearchCV(estimator=rfecv, 
+                      param_distributions=param_grid, 
+                      n_iter=50,
+                      cv= k_fold, 
+                      scoring = 'roc_auc', 
+                      verbose=3,
+                      random_state=331,
+                      n_jobs=15)
+  CV_rfc.fit(X_train, y_train)
+  
+  
+def feature_selection_LASSO(X, Y):
   # preprocessing
   features = list(X.columns)
   X = X.to_numpy()

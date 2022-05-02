@@ -1,5 +1,6 @@
 # Load module
 import numpy as np
+import pandas as pd
 import os
 import datetime
 from requests import get
@@ -21,7 +22,7 @@ def feature_selection_svm_rfecv(X,Y):
   y = Y.to_numpy()
   
   # train-test split
-  X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.30, random_state=331)
+  # X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.30, random_state=331)
 
   # model conf.
   k_fold = StratifiedKFold(n_splits=5, shuffle=True, random_state=331)
@@ -30,8 +31,7 @@ def feature_selection_svm_rfecv(X,Y):
   
   ## search parameter
   param_grid = {
-  #     'estimator__C': [0.001, 0.01, 0.1, 0.25, 0.5, 0.75, 1.0, 5.0, 7.5, 10],
-  #     'estimator__gamma': [0.001, 0.01, 0.1, 1.0, 2.0, 3.0, 10.0]
+      # SVC - linear kernel의 경우 'C'만 parameter로 확인하면 됨
       'estimator__C': np.arange(0.01,100,0.01)
   }
   
@@ -41,10 +41,12 @@ def feature_selection_svm_rfecv(X,Y):
                       n_iter=50,
                       cv= k_fold, 
                       scoring = 'roc_auc', 
-                      verbose=3,
+                      verbose=1,
                       random_state=331,
                       n_jobs=15)
-  CV_rfc.fit(X_train, y_train)
+  CV_rfc.fit(X, y)
+  
+  return CV_rfc.best_estimator_.support
   
   
 def feature_selection_LASSO(X, Y):
@@ -54,7 +56,7 @@ def feature_selection_LASSO(X, Y):
   y = Y.to_numpy()
   
   # train-test split
-  X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.30, random_state=331)
+  # X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.30, random_state=331)
   
   # ML pipeline
   pipeline = Pipeline([
@@ -64,10 +66,10 @@ def feature_selection_LASSO(X, Y):
   # grid search
   search = GridSearchCV(pipeline,
                       {'model__alpha':np.arange(0.001,5,0.001)},
-                      cv = 10, scoring="neg_mean_squared_error",verbose=2
+                      cv = 10, scoring="neg_mean_squared_error",verbose=1
                       )
                       
-  search.fit(X_train,y_train)
+  search.fit(X,y)
 
   print(search.best_params_)
   coefficients = search.best_estimator_.named_steps['model'].coef_

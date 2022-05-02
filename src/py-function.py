@@ -28,14 +28,14 @@ def df_test(X, Y):
                     
   # grid search
   search = GridSearchCV(pipeline,
-                      {'model__alpha':np.arange(0.001,10,0.001)},
-                      cv = 10, scoring="neg_mean_squared_error",verbose=1
+                      {'model__alpha':np.arange(0.001,5,0.001)},
+                      cv = 10, scoring="neg_mean_squared_error",verbose=2
                       )
                       
   search.fit(X_train,y_train)
-  
+
+  print(search.best_params_)
   coefficients = search.best_estimator_.named_steps['model'].coef_
-  print(search.best_estimator_.alpha)
   importance = np.abs(coefficients)
   
   return importance

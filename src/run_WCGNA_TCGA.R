@@ -5,7 +5,7 @@ library(tidyverse)
 library(TCGAbiolinks)
 library(reticulate)
 
-use_condaenv(condaenv = "multiomics-cpu")
+use_condaenv(condaenv = "geo-py")
 source_python("src/py-function.py")
 
 rdata_path <- "RData/"

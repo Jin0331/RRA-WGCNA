@@ -17,9 +17,8 @@ from sklearn.svm import SVC
 
 def feature_selection_svm_rfecv(X,Y):
   # preprocessing
-  features = list(X.columns)
-  X = X.to_numpy()
-  y = Y.to_numpy()
+  # X = X.to_numpy()
+  # y = Y.to_numpy()
   
   # train-test split
   # X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.30, random_state=331)
@@ -44,16 +43,15 @@ def feature_selection_svm_rfecv(X,Y):
                       verbose=1,
                       random_state=331,
                       n_jobs=15)
-  CV_rfc.fit(X, y)
+  CV_rfc.fit(X, Y)
   
-  return CV_rfc.best_estimator_.support
+  return CV_rfc.best_estimator_.support_
   
   
 def feature_selection_LASSO(X, Y):
   # preprocessing
-  features = list(X.columns)
-  X = X.to_numpy()
-  y = Y.to_numpy()
+  # X = X.to_numpy()
+  # y = Y.to_numpy()
   
   # train-test split
   # X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.30, random_state=331)
@@ -69,7 +67,7 @@ def feature_selection_LASSO(X, Y):
                       cv = 10, scoring="neg_mean_squared_error",verbose=1
                       )
                       
-  search.fit(X,y)
+  search.fit(X,Y)
 
   print(search.best_params_)
   coefficients = search.best_estimator_.named_steps['model'].coef_

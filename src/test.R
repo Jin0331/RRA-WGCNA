@@ -5,9 +5,6 @@ library(reticulate)
 use_condaenv(condaenv = "geo-py")
 source_python("src/py-function.py")
 
-robustdeg_ge # TCGA gene expression  - count
-data_trait
-
 # intra-extra analysis for top hub gene
 # top_hub_gene <- extra_analysis_hub %>% pull(preferredName_A) %>% unique()
 top_hub_gene <- intra_analysis_hub %>% unique()
@@ -22,6 +19,8 @@ DF <- data_trait %>%
   column_to_rownames(var = "sample") %>% 
   select(1, all_of(top_hub_gene))
 
+DF %>% rownames_to_column(var = "sample_barcode") %>% write_delim(file = "test.txt", delim = "\t", )
+
 y_df <- DF %>% select_at(1)
 x_df <- DF %>% select_at(-1)
 
@@ -31,34 +30,17 @@ svm_rfe_binary <- feature_selection_svm_rfecv(x_df, y_df)
 lasso_validation_hub_gene <- x_df[ ,which(lasso_coef > 0)] %>% colnames()
 
 svm_rfe_validation_hub_gene <- x_df[ ,which(svm_rfe_binary == TRUE)] %>% colnames()
+intersect_gene_selected <- intersect(lasso_validation_hub_gene, svm_rfe_validation_hub_gene)
 
-lasso_validation_hub_gene %>% length()
-svm_rfe_validation_hub_gene %>% length()
-intersect(lasso_validation_hub_gene, svm_rfe_validation_hub_gene)
+# intersection DF
+DF %>% select(1, all_of(interse))
+
 
 # intersect venn
-myCol <- RColorBrewer::brewer.pal(2, "Pastel2")
-venn.diagram(
-  x = list(lasso_validation_hub_gene, svm_rfe_validation_hub_gene),
-  category.names = c("LASSO" , "SVM-RFE"),
-  filename = 'intersection.png',
-  output=TRUE, sub.cex = 0.3,
-  
-  # Circles
-  lwd = 2,
-  lty = 'blank',
-  fill = myCol[1:2],
-  
-  # Numbers
-  cex = .6,
-  fontface = "bold",
-  fontfamily = "sans",
-  
-  # Output features
-  imagetype="png" ,
-  height = 1300 , 
-  width = 1300 , 
-  resolution = 300,
-  compression = "lzw"
-)
+install.packages("ggVennDiagram")
+library(ggVennDiagram)
+library(ggplot2)
 
+ggVennDiagram(x = list(LASS = lasso_validation_hub_gene, `SVM-RFE` = svm_rfe_validation_hub_gene)) +
+  scale_fill_gradient(low = "#F4FAFE", high = "#4981BF") +
+  theme(legend.position = "none")

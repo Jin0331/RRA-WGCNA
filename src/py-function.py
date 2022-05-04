@@ -13,8 +13,22 @@ from sklearn.model_selection import train_test_split, GridSearchCV, RepeatedStra
 from sklearn.linear_model import Lasso
 from sklearn.impute import KNNImputer
 from sklearn.svm import SVC
+from pycaret.classification import *
 
-
+def ml_validation(DF):
+  
+  # preprocessing
+  s = setup(geo_select_gene, target = 'sample_type', fix_imbalance=True, silent=True)
+  
+  # classification model, sort by MCC
+  best = compare_models(include=['xgboost', 'et', 'catboost', 'lightgbm', 'rf'], sort = "MCC")
+  score_table = pull()
+  
+  # feature importance
+  plot_model(best, plot = 'feature', use_train_data=True, save=True, verbose=0) # save plot
+  feature_importance = pd.DataFrame(best.feature_importances_, 
+             index=geo_select_gene.columns.to_list()[1:], columns=['Importance_value'])
+  
 def feature_selection_svm_rfecv(X,Y):
   # model conf.
   k_fold = StratifiedKFold(n_splits=5, shuffle=True, random_state=331)
@@ -35,7 +49,7 @@ def feature_selection_svm_rfecv(X,Y):
                       scoring = 'roc_auc', 
                       verbose=1,
                       random_state=331,
-                      n_jobs=15)
+                      n_jobs=10)
   CV_rfc.fit(X, Y.values.ravel())
   
   return CV_rfc.best_estimator_.support_
@@ -45,7 +59,7 @@ def feature_selection_LASSO(X, Y):
   # ML pipeline
   pipeline = Pipeline([
                      ('scaler',StandardScaler()),
-                     ('model',Lasso(max_iter=9999))])
+                     ('model',Lasso(max_iter=99999))])
                     
   # grid search
   search = GridSearchCV(pipeline,

@@ -4,6 +4,7 @@ library(WGCNA)
 library(tidyverse)
 library(TCGAbiolinks)
 library(reticulate)
+library(ggVennDiagram)
 
 use_condaenv(condaenv = "geo-py")
 source_python("src/py-function.py")
@@ -15,9 +16,9 @@ pr_name <- "LIHC"
 
 
 
-run_deseq_normal <- function(pr_name, rdata_path, deg_path, batch_removal){
-  register(MulticoreParam(20))
-  suppressMessages({
+# run_deseq_normal <- function(pr_name, rdata_path, deg_path, batch_removal){
+  # register(MulticoreParam(20))
+  # suppressMessages({
     
     # TCGA FPKM
     cancer_fpkm <- load_tcga_dataset(pkl_path = "PKL/", raw_path = "RAW_DATA/", cancer_type = pr_name) %>% 
@@ -126,12 +127,16 @@ run_deseq_normal <- function(pr_name, rdata_path, deg_path, batch_removal){
     expression_sample <- rownames(robustdeg_ge)
     
     # Factor 
+    # Sample Type
+    ## group 0 - long survival group (wild type)
+    ## group 1 - short survival group (mu type)
     traitRows <- match(expression_sample, clinical_trait$sampleID)
     data_trait <- clinical_trait[traitRows, ] %>% 
       column_to_rownames(var = "sampleID") %>% 
       dplyr::select(sample_type, OS, OS.time, DSS, DSS.time, DFI, DFI.time, PFI, PFI.time,age_at_initial_pathologic_diagnosis, 
              pathologic_T, pathologic_M, pathologic_N, pathologic_stage, child_pugh_classification_grade, 
              fibrosis_ishak_score) %>% 
+      mutate(sample_type = ifelse(sample_type == "Primary Tumor", 1, 0)) %>%  # sample type 한정
       mutate_if(is.character, as.factor) %>% 
       mutate_all(as.numeric)
     data_trait[is.na(data_trait)] <- 0
@@ -218,11 +223,11 @@ run_deseq_normal <- function(pr_name, rdata_path, deg_path, batch_removal){
       pull(1)
     
     # extramodular analysis
-    extra_analysis_hub <- string_network(hub_gene = intra_analysis_hub) %>% 
-      filter(score > 0.9) 
-    
-    ## cytoscape (?)
-    extra_analysis_hub %>% write_delim(file = "Cytoscape/tophubgene.txt", delim = "\t")
+    # extra_analysis_hub <- string_network(hub_gene = intra_analysis_hub) %>% 
+    #   filter(score > 0.9) 
+    # 
+    # ## cytoscape (?)
+    # extra_analysis_hub %>% write_delim(file = "Cytoscape/tophubgene.txt", delim = "\t")
     
     # collection of plot
     {
@@ -282,7 +287,7 @@ run_deseq_normal <- function(pr_name, rdata_path, deg_path, batch_removal){
                            cex.main = 1.2, cex.lab = 1.2, cex.axis = 1.2, col = module)
       }
     }
-  })  
+  # })  
   
-  return(tcga_deseq_result_tidy)
-}
+  # return(tcga_deseq_result_tidy)
+# }

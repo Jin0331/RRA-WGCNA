@@ -289,12 +289,11 @@ run_limma <- function(ge, de){
   fit.cont <- contrasts.fit(fit,cont)
   fit.cont <- eBayes(fit.cont)
   res <- topTable(fit.cont,number=Inf) 
-  target <- res[res$P.Value <0.05,] %>% 
+  target <- res[res$P.Value < 0.05,] %>% 
     rownames_to_column() %>% as_tibble()
   
   return(target)
 }
-
 
 biodbnet_db2db <- function(id){
   base_url <- "https://biodbnet-abcc.ncifcrf.gov/webServices/rest.php/"

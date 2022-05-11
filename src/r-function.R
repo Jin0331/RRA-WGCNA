@@ -325,7 +325,7 @@ rra_extract <- function(m_list, logfc = 0.0, fdr = 0.05){
     lapply(X = ., FUN = function(list_name){
       tmp <- multiple_limma[[list_name]] %>% 
         filter(adj.P.Val < fdr & (logFC > logfc | logFC < -(logfc))) %>% 
-        arrange(desc(logFC)) %>% 
+        # arrange(desc(logFC)) %>% 
         select(rowname, logFC)
       colnames(tmp) <- c("GENE", list_name)
       return(tmp)
@@ -335,7 +335,8 @@ rra_extract <- function(m_list, logfc = 0.0, fdr = 0.05){
   up_degs <- names(m_list) %>% 
     lapply(X = ., FUN = function(list_name){
       m_list[[list_name]] %>% 
-        filter(adj.P.Val < fdr & logFC > logfc) %>%
+        filter(logFC > logfc) %>%
+        arrange(adj.P.Val) %>% 
         pull(rowname) %>%
         return()
     }) 
@@ -344,7 +345,8 @@ rra_extract <- function(m_list, logfc = 0.0, fdr = 0.05){
   down_degs <- names(m_list) %>% 
     lapply(X = ., FUN = function(list_name){
       m_list[[list_name]] %>% 
-        filter(adj.P.Val < fdr & logFC < -(logfc)) %>% 
+        filter(logFC < -(logfc)) %>% 
+        arrange(adj.P.Val) %>% 
         pull(rowname) %>% 
         return()
     }) 

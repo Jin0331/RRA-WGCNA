@@ -3,7 +3,7 @@ library(pheatmap)
 library(tidyverse)
 
 # function
-source("src/function.R")
+source("src/r-function.R")
 
 # load
 load("~/WORK/GEO/RData/HCC_GEO_integrated_norm.RData")

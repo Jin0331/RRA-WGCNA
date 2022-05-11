@@ -1,3 +1,6 @@
 # RRA-WGCNA
 
-![worflow](https://user-images.githubusercontent.com/42958809/167751963-319eb4c9-a581-4551-a1fd-9e6d2bea7299.png)
+* **Workflow**
+
+![workflow](https://user-images.githubusercontent.com/42958809/167774216-553390d6-0e07-470f-996e-420ac8b1afc3.png)
+

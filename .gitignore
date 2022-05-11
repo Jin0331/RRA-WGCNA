@@ -13,3 +13,5 @@ GDCdata/
 RAW_DATA/
 PKL/
 Cytoscape/
+*.ipynb
+src/.ipynb_checkpoints

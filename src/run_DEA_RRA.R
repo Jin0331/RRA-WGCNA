@@ -1,7 +1,5 @@
 # load library
-library(GEOquery)
-library(limma)
-library(tidyverse)
+
 
 # function
 source("src/r-function.R")
@@ -47,3 +45,7 @@ multiple_limma[[gse_name]] <- run_limma(ge = geneExpression, de = design)
 
 # save
 save(multiple_limma, file = "RData/HCC_GEO_integrated_norm.RData")
+
+# rra & robust DEGs
+robust_degs <- rra_analysis(m_list = multiple_limma, logfc = 0, fdr = 0.05)
+

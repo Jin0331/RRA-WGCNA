@@ -17,6 +17,7 @@ dec_two <- function(x) {
   return (format(round(x, 2), nsmall = 2));
 }
 
+# mapping function ====
 symbol_mapping <- function(ge, col_name, platform_ann_df){
   thisGene <- rownames(ge) %>%
     lapply(FUN = function(value){
@@ -51,7 +52,32 @@ symbol_mapping <- function(ge, col_name, platform_ann_df){
       return()
   }
 }
+biodbnet_db2db <- function(id){
+  base_url <- "https://biodbnet-abcc.ncifcrf.gov/webServices/rest.php/"
+  json_url <- paste0(base_url, "biodbnetRestApi.json?")
+  mapping_result <- list()
+  id_chunk <- split(id, ceiling(seq_along(id)/1000))
+  
+  for(index in 1:length(id_chunk)){
+    parameters <- list(method="db2db", 
+                       inputValues=id_chunk[[index]],
+                       input="genbanknucleotideaccession",
+                       outputs=c("genesymbol"),
+                       taxonId="9606",
+                       format="row")
+    
+    mapping_result[[index]] <- rcurl_request(json_url, parameters)
+  }
+  
+  mapping_result <- mapping_result %>% 
+    bind_rows() %>% 
+    filter(`Gene Symbol` != "-")
+  
+  return(mapping_result)
+}
 
+
+# GEO download function  ====
 #' Function that reads in a URL to check and verifies if it exists (function taken from https://stackoverflow.com/a/12195574 )
 #' 
 #' @param url the URL of a webpage
@@ -100,7 +126,31 @@ readUrl <- function(url) {
   )    
   return(out)
 }
-
+rcurl_request <- function(service_url, parameters) {
+  # Collapse all parameters into one string
+  all_parameters <- paste(
+    sapply(names(parameters), 
+           FUN=function(param_name, parameters) {
+             paste(param_name, paste(parameters[[param_name]], collapse=','), collapse='', sep='=')
+           }, 
+           parameters),
+    collapse="&")
+  
+  # Paste base URL and parameters
+  requested_url <- paste0(service_url, all_parameters)
+  
+  # Encode URL (in case there would be any space character for instance)
+  # requested_url <- URLencode(requested_url)
+  
+  # Start request to service
+  response <- GET(requested_url)
+  
+  raise <- content(response, as="text")
+  #parse JSON
+  new <- fromJSON(raise)
+  
+  return(new)
+}
 #' Function that reads in the GEO code of a dataset, and returns the gene expression dataframe.
 #' 
 #' @param datasetGeoCode the GEO code of a dataset.
@@ -137,9 +187,9 @@ getGeneExpressionFromGEO <- function(datasetGeoCode, retrieveGeneSymbols, verbos
   complete_url <- paste0("https://ftp.ncbi.nlm.nih.gov/geo/series/", GSE_code_for_url, "/", GSE_code)
   
   checked_html_text_url <- lapply(complete_url, readUrl)
-
   
-
+  
+  
   #             
   if(all(checked_html_text == "EMPTY_STRING")) {
     
@@ -253,36 +303,10 @@ getGeneExpressionFromGEO <- function(datasetGeoCode, retrieveGeneSymbols, verbos
     
     return(list(gene_expression = geneExpression_dup , 
                 pheno = phenoData(gset)))
-  
-}   }
+    
+  }   }
 
-rcurl_request <- function(service_url, parameters) {
-  # Collapse all parameters into one string
-  all_parameters <- paste(
-    sapply(names(parameters), 
-           FUN=function(param_name, parameters) {
-             paste(param_name, paste(parameters[[param_name]], collapse=','), collapse='', sep='=')
-           }, 
-           parameters),
-    collapse="&")
-  
-  # Paste base URL and parameters
-  requested_url <- paste0(service_url, all_parameters)
-  
-  # Encode URL (in case there would be any space character for instance)
-  # requested_url <- URLencode(requested_url)
-  
-  # Start request to service
-  response <- GET(requested_url)
-  
-  raise <- content(response, as="text")
-  #parse JSON
-  new <- fromJSON(raise)
-  
-  return(new)
-}
-
-# limma
+# DEA & RRA function====
 run_limma <- function(ge, de){
   fit <- lmFit(ge,de)
   cont <- makeContrasts(TP-NT,levels=de) # 데이터에 맞추어 manual로 설정해야 됨
@@ -294,80 +318,72 @@ run_limma <- function(ge, de){
   
   return(target)
 }
-
-biodbnet_db2db <- function(id){
-  base_url <- "https://biodbnet-abcc.ncifcrf.gov/webServices/rest.php/"
-  json_url <- paste0(base_url, "biodbnetRestApi.json?")
-  mapping_result <- list()
-  id_chunk <- split(id, ceiling(seq_along(id)/1000))
-  
-  for(index in 1:length(id_chunk)){
-    parameters <- list(method="db2db", 
-                       inputValues=id_chunk[[index]],
-                       input="genbanknucleotideaccession",
-                       outputs=c("genesymbol"),
-                       taxonId="9606",
-                       format="row")
-    
-    mapping_result[[index]] <- rcurl_request(json_url, parameters)
-  }
-  
-  mapping_result <- mapping_result %>% 
-    bind_rows() %>% 
-    filter(`Gene Symbol` != "-")
-  
-  return(mapping_result)
-}
-
 rra_extract <- function(m_list, logfc = 0.0, fdr = 0.05){
   # combine deg
   combine_degs <- names(m_list) %>% 
     lapply(X = ., FUN = function(list_name){
       tmp <- multiple_limma[[list_name]] %>% 
         filter(adj.P.Val < fdr & (logFC > logfc | logFC < -(logfc))) %>% 
-        # arrange(desc(logFC)) %>% 
+        arrange(desc(logFC)) %>%
         select(rowname, logFC)
       colnames(tmp) <- c("GENE", list_name)
       return(tmp)
-    }) %>% reduce(., left_join, by = "GENE")
+    }) %>% 
+    reduce(., left_join, by = "GENE") %>% 
+    bind_cols(., apply(.[,-1], 1, mean, na.rm = TRUE) %>% 
+                tibble(group = .)) 
   
   # up-regulated
-  up_degs <- names(m_list) %>% 
+  updown_degs <- names(m_list) %>% 
     lapply(X = ., FUN = function(list_name){
       m_list[[list_name]] %>% 
-        filter(logFC > logfc) %>%
+        filter(adj.P.Val < fdr & (logFC > logfc | logFC < -(logfc))) %>% 
         arrange(adj.P.Val) %>% 
         pull(rowname) %>%
         return()
     }) 
   
-  # down-regulated
-  down_degs <- names(m_list) %>% 
-    lapply(X = ., FUN = function(list_name){
-      m_list[[list_name]] %>% 
-        filter(logFC < -(logfc)) %>% 
-        arrange(adj.P.Val) %>% 
-        pull(rowname) %>% 
-        return()
-    }) 
-  
   # Aggregate the inputs
   # run RRA
-  up_deg_rra <- aggregateRanks(glist = up_degs, method = "RRA") %>%
+  updown_deg_rra <- aggregateRanks(glist = updown_degs, method = "RRA") %>%
     as_tibble() %>% 
     filter(Score < 0.05) %>% 
     arrange(Score)
   
-  down_deg_rra <- aggregateRanks(glist = down_degs, method = "RRA") %>%
-    as_tibble() %>% 
-    filter(Score < 0.05) %>% 
-    arrange(Score)
+  # # 1 - combine deg, 2 - up_down-regulated RRA
+  list(combine_degs = combine_degs, updown_rra = updown_deg_rra) %>% return()
+}
+rra_analysis <- function(m_list, logfc = 0, fdr = 0.05, save_path =  "RData/GEO_RobustDEGs_norm.RData"){
+  rra_result <- rra_extract(m_list = multiple_limma, logfc = logfc, fdr = fdr)
+  combine_degs_rra <- rra_result[[1]] %>% 
+    filter(GENE %in% rra_result[[2]]$Name) %>% 
+    arrange(desc(group))
   
-  # 1 - combine deg, 2 - up-regulated RRA 3 - down-regulated RRA
-  list(combine_deg = combine_degs, up_deg_rra = up_deg_rra, down_deg_rra = down_deg_rra) %>% 
-    return()
+  up_down_rra_gene <- bind_rows(head(combine_degs_rra, 20),
+                                tail(combine_degs_rra, 20)) %>% 
+    select(-group)
+  
+  # heatmap
+  combine_degs_m <- up_down_rra_gene[,-1] %>% as.matrix()
+  rownames(combine_degs_m) <- up_down_rra_gene$GENE
+  colnames(combine_degs_m) <- colnames(up_down_rra_gene)[2:length(colnames(up_down_rra_gene))]
+  pheatmap(combine_degs_m, 
+           display_numbers = TRUE,
+           number_color = "black",
+           fontsize_number = 10,
+           border_color = "black",
+           cluster_rows = F,
+           cluster_cols = F,
+           cellwidth = 35,
+           cellheight = 10
+  )
+  # save
+  save(up_down_rra_gene, file = save_path)
+  
+  return(combine_degs_rra %>% pull(1))
 }
 
+# STRING function ====
 retry <- function(expr, isError=function(x) "try-error" %in% class(x), maxErrors=5, sleep=0) {
   attempts = 0
   retval = try(eval(expr))
@@ -388,7 +404,6 @@ retry <- function(expr, isError=function(x) "try-error" %in% class(x), maxErrors
   }
   return(retval)
 }
-
 #' Function that returns STRING network
 #' @param hub_gene input character vector
 #' @return network dataframe

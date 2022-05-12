@@ -1,15 +1,21 @@
 # library ----
-library(GEOquery)
-library(limma)
-library(WGCNA)
-library(RobustRankAggreg)
-library(pheatmap)
-library(DESeq2)
-library(impute)
-library(TCGAbiolinks)
-library(reticulate)
-library(ggVennDiagram)
-library(tidyverse)
+suppressMessages({
+  library(GEOquery)
+  library(limma)
+  library(RobustRankAggreg)
+  library(pheatmap)
+  library(DESeq2)
+  library(impute)
+  library(TCGAbiolinks)
+  library(reticulate)
+  library(ggVennDiagram)
+  library(tidyverse)
+  library(WGCNA)
+  
+  use_condaenv(condaenv = "geo-py")
+  source_python("src/py-function.py")
+})
+
 
 # function ----
 #' Function that returns numeric values with 2 decimal numbers.
@@ -328,9 +334,9 @@ rra_extract <- function(ml, logfc = 0.0, fdr = 0.05){
   combine_degs <- names(ml) %>% 
     lapply(X = ., FUN = function(list_name){
       tmp <- ml[[list_name]] %>% 
-        filter(adj.P.Val < fdr & (logFC > logfc | logFC < -(logfc))) %>% 
+        dplyr::filter(adj.P.Val < fdr & (logFC > logfc | logFC < -(logfc))) %>% 
         arrange(desc(logFC)) %>%
-        select(rowname, logFC)
+        dplyr::select(rowname, logFC)
       colnames(tmp) <- c("GENE", list_name)
       return(tmp)
     }) %>% 
@@ -342,7 +348,7 @@ rra_extract <- function(ml, logfc = 0.0, fdr = 0.05){
   updown_degs <- names(ml) %>% 
     lapply(X = ., FUN = function(list_name){
       ml[[list_name]] %>% 
-        filter(adj.P.Val < fdr & (logFC > logfc | logFC < -(logfc))) %>% 
+        dplyr::filter(adj.P.Val < fdr & (logFC > logfc | logFC < -(logfc))) %>% 
         arrange(adj.P.Val) %>% 
         dplyr::pull(rowname) %>%
         return()
@@ -352,7 +358,7 @@ rra_extract <- function(ml, logfc = 0.0, fdr = 0.05){
   # run RRA
   updown_deg_rra <- aggregateRanks(glist = updown_degs, method = "RRA") %>%
     as_tibble() %>% 
-    filter(Score < 0.05) %>% 
+    dplyr::filter(Score < 0.05) %>% 
     arrange(Score)
   
   # # 1 - combine deg, 2 - up_down-regulated RRA
@@ -361,12 +367,12 @@ rra_extract <- function(ml, logfc = 0.0, fdr = 0.05){
 rra_analysis <- function(m_list, logfc = 0, fdr = 0.05, save_path =  "RData/GEO_RobustDEGs_norm.RData"){
   rra_result <- rra_extract(ml = m_list, logfc = logfc, fdr = fdr)
   combine_degs_rra <- rra_result[[1]] %>% 
-    filter(GENE %in% rra_result[[2]]$Name) %>% 
+    dplyr::filter(GENE %in% rra_result[[2]]$Name) %>% 
     arrange(desc(group))
   
   up_down_rra_gene <- bind_rows(head(combine_degs_rra, 20),
                                 tail(combine_degs_rra, 20)) %>% 
-    select(-group)
+    dplyr::select(-group)
   
   # heatmap
   combine_degs_m <- up_down_rra_gene[,-1] %>% as.matrix()
@@ -385,7 +391,92 @@ rra_analysis <- function(m_list, logfc = 0, fdr = 0.05, save_path =  "RData/GEO_
   # save
   save(up_down_rra_gene, file = save_path)
   
-  return(combine_degs_rra %>% pull(1))
+  return(combine_degs_rra %>% 
+           dplyr::pull(1))
+}
+
+# WGCNA function ====
+network_preprocessing <- function(pr_name, robustdegs){
+  cancer_fpkm <- load_tcga_dataset(pkl_path = "PKL/", raw_path = "RAW_DATA/", cancer_type = pr_name) %>% 
+    rownames_to_column(var = "id")
+  
+  gene_probe_mapping <- read_delim(file = "https://toil-xena-hub.s3.us-east-1.amazonaws.com/download/probeMap%2Fgencode.v23.annotation.gene.probemap",
+                                   delim = "\t", show_col_types = FALSE, progress = FALSE) %>% 
+    select(id, gene) %>% 
+    inner_join(x = ., y = cancer_fpkm, by = "id") %>% 
+    select(-id)
+  
+  dataFilt <- gene_probe_mapping %>% 
+    mutate_if(is.numeric, .funs = function(value){
+      2^value - 0.001 %>% return()
+    }) %>% 
+    mutate_if(is.numeric, .funs = function(value){
+      ifelse(value < 0, 0, value) %>% return()
+    }) %>% 
+    mutate_if(is.numeric, .funs = function(value){
+      log2(value + 1) %>% return()
+    }) %>% 
+    distinct(gene, .keep_all = TRUE) %>% 
+    column_to_rownames(var = "gene") %>% 
+    as.matrix()
+  
+  
+  # row to col AND DESeq2 normalized log2(x+1)
+  robustdeg_ge <- lapply(X = robustdegs, FUN = function(deg){
+    error <- FALSE
+    tryCatch(
+      expr = {
+        tmp <- dataFilt[deg, ]
+      },
+      error = function(e) {
+        error <<- TRUE
+      }
+    )
+    if(error){
+      return(NULL)
+    } else {
+      tmp <- as.matrix(tmp) %>% t()
+      rownames(tmp) <- deg
+      return(tmp)
+    }}) %>% do.call(rbind, .) %>% 
+    t() %>% 
+    as.data.frame()
+  
+  # split rowname
+  rownames(robustdeg_ge) <- rownames(robustdeg_ge) %>% as_tibble() %>% 
+    separate(col = value, into = c("A","B","C","D")) %>% 
+    unite(col = id, sep = "-") %>% dplyr::pull(1)
+  # gsub('.{1}$', '', .)
+  
+  # sample & gene filtering
+  gsg <- goodSamplesGenes(robustdeg_ge, verbose = 3)
+  if (!gsg$allOK){
+    # Optionally, print the gene and sample names that were removed:
+    if (sum(!gsg$goodGenes)>0)
+      printFlush(paste("Removing genes:", paste(names(robustdeg_ge)[!gsg$goodGenes], collapse = ", ")));
+    if (sum(!gsg$goodSamples)>0)
+      printFlush(paste("Removing samples:", paste(rownames(robustdeg_ge)[!gsg$goodSamples], collapse = ", ")));
+    # Remove the offending genes and samples from the data:
+    robustdeg_ge <-  robustdeg_ge[gsg$goodSamples, gsg$goodGenes]
+  }
+  
+  # network construct
+  # net construct
+  net <- blockwiseModules(datExpr = robustdeg_ge, 
+                          power = sft,
+                          corType = "pearson",
+                          TOMType = "unsigned", 
+                          minModuleSize = 30,
+                          reassignThreshold = 0, 
+                          mergeCutHeight = 0.20,
+                          numericLabels = TRUE, 
+                          pamRespectsDendro = FALSE,
+                          saveTOMs = TRUE,
+                          saveTOMFileBase = paste0("TCGA-", pr_name),
+                          verbose = 3)
+  
+  
+  return(list(deg = robustdeg_ge, network = net))
 }
 
 # STRING function ====

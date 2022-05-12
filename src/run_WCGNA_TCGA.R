@@ -1,119 +1,24 @@
 # function
 source("src/r-function.R")
 
-use_condaenv(condaenv = "geo-py")
-source_python("src/py-function.py")
 
 # LOCAL VARIABLE
 # rdata_path <- "RData/"
 load(file = "RData/HCC_GEO_RobustDEGs_norm.RData")
-robustdegs <- robust_degs
 pr_name <- "LIHC"
 
 
 # weighted gene co-expression network costruction
+network <- network_preprocessing(pr_name = "LIHC", robustdegs = robustdegs)
 
-## GDC input data prerpocessing
-
-network_preprocessing <- function(pr_name, robustdegs){
-  cancer_fpkm <- load_tcga_dataset(pkl_path = "PKL/", raw_path = "RAW_DATA/", cancer_type = pr_name) %>% 
-    rownames_to_column(var = "id")
-  
-  gene_probe_mapping <- read_delim(file = "https://toil-xena-hub.s3.us-east-1.amazonaws.com/download/probeMap%2Fgencode.v23.annotation.gene.probemap",
-                                   delim = "\t") %>% 
-    select(id, gene) %>% 
-    inner_join(x = ., y = cancer_fpkm, by = "id") %>% 
-    select(-id)
-  
-  dataFilt <- gene_probe_mapping %>% 
-    mutate_if(is.numeric, .funs = function(value){
-      2^value - 0.001 %>% return()
-    }) %>% 
-    mutate_if(is.numeric, .funs = function(value){
-      ifelse(value < 0, 0, value) %>% return()
-    }) %>% 
-    mutate_if(is.numeric, .funs = function(value){
-      log2(value + 1) %>% return()
-    }) %>% 
-    distinct(gene, .keep_all = TRUE) %>% 
-    column_to_rownames(var = "gene") %>% 
-    as.matrix()
-  
-  
-  # row to col AND DESeq2 normalized log2(x+1)
-  robustdeg_ge <- lapply(X = robustdegs, FUN = function(deg){
-    error <- FALSE
-    tryCatch(
-      expr = {
-        tmp <- dataFilt[deg, ]
-      },
-      error = function(e) {
-        error <<- TRUE
-      }
-    )
-    if(error){
-      return(NULL)
-    } else {
-      tmp <- as.matrix(tmp) %>% t()
-      rownames(tmp) <- deg
-      return(tmp)
-    }}) %>% do.call(rbind, .) %>% 
-    t() %>% 
-    as.data.frame()
-  
-  # split rowname
-  rownames(robustdeg_ge) <- rownames(robustdeg_ge) %>% as_tibble() %>% 
-    separate(col = value, into = c("A","B","C","D")) %>% 
-    unite(col = id, sep = "-") %>% dplyr::pull(1)
-  # gsub('.{1}$', '', .)
-  
-  return(robustdeg_ge)
-}
-
-robustdeg_ge <- network_preprocessing(pr_name = "LIHC")
-
-
+# network variable
+moduleLabels <- network[[2]]$colors
+moduleColors <-  labels2colors(network[[2]]$colors)
+MEs <- network[[2]]$MEs;
+geneTree <- network[[2]]$dendrograms[[1]]
     
     
-    
-    # sample & gene filtering
-    gsg <- goodSamplesGenes(robustdeg_ge, verbose = 3)
-    if (!gsg$allOK){
-      # Optionally, print the gene and sample names that were removed:
-      if (sum(!gsg$goodGenes)>0)
-        printFlush(paste("Removing genes:", paste(names(robustdeg_ge)[!gsg$goodGenes], collapse = ", ")));
-      if (sum(!gsg$goodSamples)>0)
-        printFlush(paste("Removing samples:", paste(rownames(robustdeg_ge)[!gsg$goodSamples], collapse = ", ")));
-      # Remove the offending genes and samples from the data:
-      robustdeg_ge <-  robustdeg_ge[gsg$goodSamples, gsg$goodGenes]
-    }
-    
-
-
-    # power calculation
-    powers <- c(c(1:10), seq(from = 12, to=20, by=2))
-    sft <- pickSoftThreshold(robustdeg_ge, powerVector = powers, verbose = 5)
-    
-    # net construct
-    net <- blockwiseModules(datExpr = robustdeg_ge, 
-                            power = 9,
-                            corType = "pearson",
-                            TOMType = "unsigned", 
-                            minModuleSize = 30,
-                            reassignThreshold = 0, 
-                            mergeCutHeight = 0.20,
-                            numericLabels = TRUE, 
-                            pamRespectsDendro = FALSE,
-                            saveTOMs = TRUE,
-                            saveTOMFileBase = "TCGA-LIHC",
-                            verbose = 3)
-    
-    moduleLabels <- net$colors
-    moduleColors <-  labels2colors(net$colors)
-    MEs <- net$MEs;
-    geneTree <- net$dendrograms[[1]]
-    
-    # clinical trait
+# clinical trait
     # TCGAbiolinks clinical data
     # clinical_trait <- GDCquery_clinic(project = paste0("TCGA-", pr_name), type = "clinical")
     

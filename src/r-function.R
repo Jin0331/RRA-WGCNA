@@ -4,6 +4,11 @@ library(limma)
 library(WGCNA)
 library(RobustRankAggreg)
 library(pheatmap)
+library(DESeq2)
+library(impute)
+library(TCGAbiolinks)
+library(reticulate)
+library(ggVennDiagram)
 library(tidyverse)
 
 # function ----
@@ -318,28 +323,28 @@ run_limma <- function(ge, de){
   
   return(target)
 }
-rra_extract <- function(m_list, logfc = 0.0, fdr = 0.05){
+rra_extract <- function(ml, logfc = 0.0, fdr = 0.05){
   # combine deg
-  combine_degs <- names(m_list) %>% 
+  combine_degs <- names(ml) %>% 
     lapply(X = ., FUN = function(list_name){
-      tmp <- multiple_limma[[list_name]] %>% 
+      tmp <- ml[[list_name]] %>% 
         filter(adj.P.Val < fdr & (logFC > logfc | logFC < -(logfc))) %>% 
         arrange(desc(logFC)) %>%
         select(rowname, logFC)
       colnames(tmp) <- c("GENE", list_name)
       return(tmp)
     }) %>% 
-    reduce(., left_join, by = "GENE") %>% 
+    purrr::reduce(., left_join, by = "GENE") %>% 
     bind_cols(., apply(.[,-1], 1, mean, na.rm = TRUE) %>% 
                 tibble(group = .)) 
   
   # up-regulated
-  updown_degs <- names(m_list) %>% 
+  updown_degs <- names(ml) %>% 
     lapply(X = ., FUN = function(list_name){
-      m_list[[list_name]] %>% 
+      ml[[list_name]] %>% 
         filter(adj.P.Val < fdr & (logFC > logfc | logFC < -(logfc))) %>% 
         arrange(adj.P.Val) %>% 
-        pull(rowname) %>%
+        dplyr::pull(rowname) %>%
         return()
     }) 
   
@@ -354,7 +359,7 @@ rra_extract <- function(m_list, logfc = 0.0, fdr = 0.05){
   list(combine_degs = combine_degs, updown_rra = updown_deg_rra) %>% return()
 }
 rra_analysis <- function(m_list, logfc = 0, fdr = 0.05, save_path =  "RData/GEO_RobustDEGs_norm.RData"){
-  rra_result <- rra_extract(m_list = multiple_limma, logfc = logfc, fdr = fdr)
+  rra_result <- rra_extract(ml = m_list, logfc = logfc, fdr = fdr)
   combine_degs_rra <- rra_result[[1]] %>% 
     filter(GENE %in% rra_result[[2]]$Name) %>% 
     arrange(desc(group))

@@ -1,77 +1,80 @@
-library(DESeq2)
-library(impute)
-library(WGCNA)
-library(tidyverse)
-library(TCGAbiolinks)
-library(reticulate)
-library(ggVennDiagram)
+# function
+source("src/r-function.R")
 
 use_condaenv(condaenv = "geo-py")
 source_python("src/py-function.py")
 
-rdata_path <- "RData/"
+# LOCAL VARIABLE
+# rdata_path <- "RData/"
 load(file = "RData/HCC_GEO_RobustDEGs_norm.RData")
-robustdegs <- up_down_rra_gene %>% pull(1)
+robustdegs <- robust_degs
 pr_name <- "LIHC"
 
 
+# weighted gene co-expression network costruction
 
-# run_deseq_normal <- function(pr_name, rdata_path, deg_path, batch_removal){
-  # register(MulticoreParam(20))
-  # suppressMessages({
+## GDC input data prerpocessing
+
+network_preprocessing <- function(pr_name, robustdegs){
+  cancer_fpkm <- load_tcga_dataset(pkl_path = "PKL/", raw_path = "RAW_DATA/", cancer_type = pr_name) %>% 
+    rownames_to_column(var = "id")
+  
+  gene_probe_mapping <- read_delim(file = "https://toil-xena-hub.s3.us-east-1.amazonaws.com/download/probeMap%2Fgencode.v23.annotation.gene.probemap",
+                                   delim = "\t") %>% 
+    select(id, gene) %>% 
+    inner_join(x = ., y = cancer_fpkm, by = "id") %>% 
+    select(-id)
+  
+  dataFilt <- gene_probe_mapping %>% 
+    mutate_if(is.numeric, .funs = function(value){
+      2^value - 0.001 %>% return()
+    }) %>% 
+    mutate_if(is.numeric, .funs = function(value){
+      ifelse(value < 0, 0, value) %>% return()
+    }) %>% 
+    mutate_if(is.numeric, .funs = function(value){
+      log2(value + 1) %>% return()
+    }) %>% 
+    distinct(gene, .keep_all = TRUE) %>% 
+    column_to_rownames(var = "gene") %>% 
+    as.matrix()
+  
+  
+  # row to col AND DESeq2 normalized log2(x+1)
+  robustdeg_ge <- lapply(X = robustdegs, FUN = function(deg){
+    error <- FALSE
+    tryCatch(
+      expr = {
+        tmp <- dataFilt[deg, ]
+      },
+      error = function(e) {
+        error <<- TRUE
+      }
+    )
+    if(error){
+      return(NULL)
+    } else {
+      tmp <- as.matrix(tmp) %>% t()
+      rownames(tmp) <- deg
+      return(tmp)
+    }}) %>% do.call(rbind, .) %>% 
+    t() %>% 
+    as.data.frame()
+  
+  # split rowname
+  rownames(robustdeg_ge) <- rownames(robustdeg_ge) %>% as_tibble() %>% 
+    separate(col = value, into = c("A","B","C","D")) %>% 
+    unite(col = id, sep = "-") %>% dplyr::pull(1)
+  # gsub('.{1}$', '', .)
+  
+  return(robustdeg_ge)
+}
+
+robustdeg_ge <- network_preprocessing(pr_name = "LIHC")
+
+
     
-    # TCGA FPKM
-    cancer_fpkm <- load_tcga_dataset(pkl_path = "PKL/", raw_path = "RAW_DATA/", cancer_type = pr_name) %>% 
-      rownames_to_column(var = "id")
     
-    gene_probe_mapping <- read_delim(file = "https://toil-xena-hub.s3.us-east-1.amazonaws.com/download/probeMap%2Fgencode.v23.annotation.gene.probemap",
-                                     delim = "\t") %>% 
-      select(id, gene) %>% 
-      inner_join(x = ., y = cancer_fpkm, by = "id") %>% 
-      select(-id)
-    
-    dataFilt <- gene_probe_mapping %>% 
-      mutate_if(is.numeric, .funs = function(value){
-        2^value - 0.001 %>% return()
-      }) %>% 
-      mutate_if(is.numeric, .funs = function(value){
-        ifelse(value < 0, 0, value) %>% return()
-      }) %>% 
-      mutate_if(is.numeric, .funs = function(value){
-        log2(value + 1) %>% return()
-      }) %>% 
-      distinct(gene, .keep_all = TRUE) %>% 
-      column_to_rownames(var = "gene") %>% 
-      as.matrix()
-    
-    
-    
-    # row to col AND DESeq2 normalized log2(x+1)
-    robustdeg_ge <- lapply(X = robustdegs, FUN = function(deg){
-      error <- FALSE
-      tryCatch(
-        expr = {
-          tmp <- dataFilt[deg, ]
-        },
-        error = function(e) {
-          error <<- TRUE
-        }
-      )
-      if(error){
-        return(NULL)
-      } else {
-        tmp <- as.matrix(tmp) %>% t()
-        rownames(tmp) <- deg
-        return(tmp)
-      }}) %>% do.call(rbind, .) %>% 
-      t() %>% 
-      as.data.frame()
-    
-    # split rowname
-    rownames(robustdeg_ge) <- rownames(robustdeg_ge) %>% as_tibble() %>% 
-      separate(col = value, into = c("A","B","C","D")) %>% 
-      unite(col = id, sep = "-") %>% pull(1)
-      # gsub('.{1}$', '', .)
     
     # sample & gene filtering
     gsg <- goodSamplesGenes(robustdeg_ge, verbose = 3)

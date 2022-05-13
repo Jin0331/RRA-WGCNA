@@ -317,7 +317,7 @@ getGeneExpressionFromGEO <- function(datasetGeoCode, retrieveGeneSymbols, verbos
     
   }   }
 
-# DEA & RRA function====
+# DEA & RRA function ====
 run_limma <- function(ge, de){
   fit <- lmFit(ge,de)
   cont <- makeContrasts(TP-NT,levels=de) # 데이터에 맞추어 manual로 설정해야 됨
@@ -395,7 +395,7 @@ rra_analysis <- function(m_list, logfc = 0, fdr = 0.05, save_path =  "RData/GEO_
            dplyr::pull(1))
 }
 
-# WGCNA function ====
+# WGCNA function ==== 
 network_preprocessing <- function(pr_name, robustdegs){
   cancer_fpkm <- load_tcga_dataset(pkl_path = "PKL/", raw_path = "RAW_DATA/", cancer_type = pr_name) %>% 
     rownames_to_column(var = "id")

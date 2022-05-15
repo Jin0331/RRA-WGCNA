@@ -460,6 +460,11 @@ network_preprocessing <- function(pr_name, robustdegs){
     robustdeg_ge <-  robustdeg_ge[gsg$goodSamples, gsg$goodGenes]
   }
   
+  # power calculation
+  powers <- c(c(1:10), seq(from = 12, to=20, by=2))
+  sft <- pickSoftThreshold(robustdeg_ge, powerVector = powers, verbose = 0) %>% 
+    .$powerEstimate
+  
   # network construct
   # net construct
   net <- blockwiseModules(datExpr = robustdeg_ge, 

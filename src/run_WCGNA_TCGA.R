@@ -87,36 +87,36 @@ find_key_modulegene <- function(network, MEs, select_clinical=NULL,){
     dplyr::pull(1) %>% 
     .[1:3]
   
-  # gene significance
-  GS <- lapply(X =  use_clinical, FUN = function(s_type){
-      trait <- data_trait[s_type]
-      names(trait) <- s_type
-      
-      # gene significance
-      geneTraitSignificance <- as.data.frame(cor(network[[1]], trait, use = "p")) %>% 
-        mutate_all(abs) %>% 
-        rownames_to_column("gene")
-      
-    }) %>% purrr::reduce(., inner_join, by = "gene") %>% 
-    column_to_rownames("gene") %>% 
-    bind_cols(., apply(., 1, median) %>% tibble(GS_median = .)) %>% 
-    select(GS_median) %>% 
-    rownames_to_column("gene")
-  
-  MM <- lapply(X =  use_clinical, FUN = function(s_type){
-    trait <- data_trait[s_type]
-    names(trait) <- s_type
-    
-    # membership module
-    geneModuleMembership <- as.data.frame(cor(network[[1]], MEs, use = "p")) %>%
-      mutate_all(abs) %>% 
-      rownames_to_column("gene")
-    
-  }) %>% purrr::reduce(., inner_join, by = "gene") %>% 
-    column_to_rownames("gene") %>% 
-    bind_cols(., apply(., 1, median) %>% tibble(MM_median = .)) %>% 
-    select(MM_median) %>% 
-    rownames_to_column("gene")
+  # # gene significance
+  # GS <- lapply(X =  use_clinical, FUN = function(s_type){
+  #     trait <- data_trait[s_type]
+  #     names(trait) <- s_type
+  #     
+  #     # gene significance
+  #     geneTraitSignificance <- as.data.frame(cor(network[[1]], trait, use = "p")) %>% 
+  #       mutate_all(abs) %>% 
+  #       rownames_to_column("gene")
+  #     
+  #   }) %>% purrr::reduce(., inner_join, by = "gene") %>% 
+  #   column_to_rownames("gene") %>% 
+  #   bind_cols(., apply(., 1, median) %>% tibble(GS_median = .)) %>% 
+  #   select(GS_median) %>% 
+  #   rownames_to_column("gene")
+  # 
+  # MM <- lapply(X =  use_clinical, FUN = function(s_type){
+  #   trait <- data_trait[s_type]
+  #   names(trait) <- s_type
+  #   
+  #   # membership module
+  #   geneModuleMembership <- as.data.frame(cor(network[[1]], MEs, use = "p")) %>%
+  #     mutate_all(abs) %>% 
+  #     rownames_to_column("gene")
+  #   
+  # }) %>% purrr::reduce(., inner_join, by = "gene") %>% 
+  #   column_to_rownames("gene") %>% 
+  #   bind_cols(., apply(., 1, median) %>% tibble(MM_median = .)) %>% 
+  #   select(MM_median) %>% 
+  #   rownames_to_column("gene")
   
   geneTraitSignificance <- as.data.frame(cor(robustdeg_ge, s_type, use = "p"))
   GSPvalue <- as.data.frame(corPvalueStudent(as.matrix(geneTraitSignificance), nSamples))
@@ -143,6 +143,8 @@ find_key_modulegene <- function(network, MEs, select_clinical=NULL,){
       filter(abs(GS) > 0.3 & abs(MM) > 0.85) %>% 
       return()
   })
+  
+  
   names(intra_module) <- signModule
   
   # modules Hub gene

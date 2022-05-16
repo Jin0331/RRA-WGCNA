@@ -396,92 +396,123 @@ rra_analysis <- function(m_list, logfc = 0, fdr = 0.05, save_path =  "RData/GEO_
 }
 
 # WGCNA function ==== 
-network_preprocessing <- function(pr_name, robustdegs){
-  cancer_fpkm <- load_tcga_dataset(pkl_path = "PKL/", raw_path = "RAW_DATA/", cancer_type = pr_name) %>% 
-    rownames_to_column(var = "id")
+network_preprocessing <- function(pr_name, robustdegs, mch = 0.25){
+  allowWGCNAThreads(nThreads = 15)
   
-  gene_probe_mapping <- read_delim(file = "https://toil-xena-hub.s3.us-east-1.amazonaws.com/download/probeMap%2Fgencode.v23.annotation.gene.probemap",
-                                   delim = "\t", show_col_types = FALSE, progress = FALSE) %>% 
-    select(id, gene) %>% 
-    inner_join(x = ., y = cancer_fpkm, by = "id") %>% 
-    select(-id)
-  
-  dataFilt <- gene_probe_mapping %>% 
-    mutate_if(is.numeric, .funs = function(value){
-      2^value - 0.001 %>% return()
-    }) %>% 
-    mutate_if(is.numeric, .funs = function(value){
-      ifelse(value < 0, 0, value) %>% return()
-    }) %>% 
-    mutate_if(is.numeric, .funs = function(value){
-      log2(value + 1) %>% return()
-    }) %>% 
-    distinct(gene, .keep_all = TRUE) %>% 
-    column_to_rownames(var = "gene") %>% 
-    as.matrix()
-  
-  
-  # row to col AND DESeq2 normalized log2(x+1)
-  robustdeg_ge <- lapply(X = robustdegs, FUN = function(deg){
-    error <- FALSE
-    tryCatch(
-      expr = {
-        tmp <- dataFilt[deg, ]
-      },
-      error = function(e) {
-        error <<- TRUE
-      }
-    )
-    if(error){
-      return(NULL)
-    } else {
-      tmp <- as.matrix(tmp) %>% t()
-      rownames(tmp) <- deg
-      return(tmp)
-    }}) %>% do.call(rbind, .) %>% 
-    t() %>% 
-    as.data.frame()
-  
-  # split rowname
-  rownames(robustdeg_ge) <- rownames(robustdeg_ge) %>% as_tibble() %>% 
-    separate(col = value, into = c("A","B","C","D")) %>% 
-    unite(col = id, sep = "-") %>% dplyr::pull(1)
-  # gsub('.{1}$', '', .)
-  
-  # sample & gene filtering
-  gsg <- goodSamplesGenes(robustdeg_ge, verbose = 3)
-  if (!gsg$allOK){
-    # Optionally, print the gene and sample names that were removed:
-    if (sum(!gsg$goodGenes)>0)
-      printFlush(paste("Removing genes:", paste(names(robustdeg_ge)[!gsg$goodGenes], collapse = ", ")));
-    if (sum(!gsg$goodSamples)>0)
-      printFlush(paste("Removing samples:", paste(rownames(robustdeg_ge)[!gsg$goodSamples], collapse = ", ")));
-    # Remove the offending genes and samples from the data:
-    robustdeg_ge <-  robustdeg_ge[gsg$goodSamples, gsg$goodGenes]
-  }
-  
-  # power calculation
-  powers <- c(c(1:10), seq(from = 12, to=20, by=2))
-  sft <- pickSoftThreshold(robustdeg_ge, powerVector = powers, verbose = 0) %>% 
-    .$powerEstimate
-  
-  # network construct
-  # net construct
-  net <- blockwiseModules(datExpr = robustdeg_ge, 
-                          power = sft,
-                          corType = "pearson",
-                          TOMType = "unsigned", 
-                          minModuleSize = 30,
-                          reassignThreshold = 0, 
-                          mergeCutHeight = 0.20,
-                          numericLabels = TRUE, 
-                          pamRespectsDendro = FALSE,
-                          saveTOMs = TRUE,
-                          saveTOMFileBase = paste0("TCGA-", pr_name),
-                          verbose = 3)
-  
+  suppressMessages({
+    cancer_fpkm <- load_tcga_dataset(pkl_path = "PKL/", raw_path = "RAW_DATA/", cancer_type = pr_name) %>% 
+      rownames_to_column(var = "id")
+    
+    gene_probe_mapping <- read_delim(file = "https://toil-xena-hub.s3.us-east-1.amazonaws.com/download/probeMap%2Fgencode.v23.annotation.gene.probemap",
+                                     delim = "\t", show_col_types = FALSE, progress = FALSE) %>% 
+      select(id, gene) %>% 
+      inner_join(x = ., y = cancer_fpkm, by = "id") %>% 
+      select(-id)
+    
+    dataFilt <- gene_probe_mapping %>% 
+      mutate_if(is.numeric, .funs = function(value){
+        2^value - 0.001 %>% return()
+      }) %>% 
+      mutate_if(is.numeric, .funs = function(value){
+        ifelse(value < 0, 0, value) %>% return()
+      }) %>% 
+      mutate_if(is.numeric, .funs = function(value){
+        log2(value + 1) %>% return()
+      }) %>% 
+      distinct(gene, .keep_all = TRUE) %>% 
+      column_to_rownames(var = "gene") %>% 
+      as.matrix()
+    
+    
+    # row to col AND DESeq2 normalized log2(x+1)
+    robustdeg_ge <- lapply(X = robustdegs, FUN = function(deg){
+      error <- FALSE
+      tryCatch(
+        expr = {
+          tmp <- dataFilt[deg, ]
+        },
+        error = function(e) {
+          error <<- TRUE
+        }
+      )
+      if(error){
+        return(NULL)
+      } else {
+        tmp <- as.matrix(tmp) %>% t()
+        rownames(tmp) <- deg
+        return(tmp)
+      }}) %>% do.call(rbind, .) %>% 
+      t() %>% 
+      as.data.frame()
+    
+    # split rowname
+    rownames(robustdeg_ge) <- rownames(robustdeg_ge) %>% as_tibble() %>% 
+      separate(col = value, into = c("A","B","C","D")) %>% 
+      unite(col = id, sep = "-") %>% dplyr::pull(1)
+    # gsub('.{1}$', '', .)
+    
+    # sample & gene filtering
+    gsg <- goodSamplesGenes(robustdeg_ge, verbose = 3)
+    if (!gsg$allOK){
+      # Optionally, print the gene and sample names that were removed:
+      if (sum(!gsg$goodGenes)>0)
+        printFlush(paste("Removing genes:", paste(names(robustdeg_ge)[!gsg$goodGenes], collapse = ", ")));
+      if (sum(!gsg$goodSamples)>0)
+        printFlush(paste("Removing samples:", paste(rownames(robustdeg_ge)[!gsg$goodSamples], collapse = ", ")));
+      # Remove the offending genes and samples from the data:
+      robustdeg_ge <-  robustdeg_ge[gsg$goodSamples, gsg$goodGenes]
+    }
+    
+    # power calculation
+    powers <- c(c(1:10), seq(from = 12, to=20, by=2))
+    sft <- pickSoftThreshold(robustdeg_ge, powerVector = powers, verbose = 0) %>% 
+      .$powerEstimate
+    
+    # network construct
+    # net construct
+    time_stamp <- Sys.time()
+    log_save <- paste("WGCNA_LOG", pr_name, time_stamp, sep = "/")
+    dir.create(paste("WGCNA_LOG", pr_name, time_stamp, sep = "/"), showWarnings = FALSE, recursive = TRUE)
+    net <- blockwiseModules(datExpr = robustdeg_ge, 
+                            power = sft,
+                            corType = "pearson",
+                            TOMType = "unsigned", 
+                            minModuleSize = 50,
+                            # maxBlockSize = 500,
+                            reassignThreshold = 0, 
+                            mergeCutHeight = mch,
+                            numericLabels = TRUE, 
+                            pamRespectsDendro = FALSE,
+                            saveTOMs = TRUE,
+                            saveTOMFileBase = paste0(log_save, "/TCGA-", pr_name),
+                            verbose = 3)
+    
+  })
+    
   
   return(list(deg = robustdeg_ge, network = net))
+}
+
+sample_cluster_plot <- function(network){
+  sampleTree <-  hclust(dist(network[[1]]), method = "average");
+  # Plot the sample tree: Open a graphic output window of size 12 by 9 inches
+  # The user should change the dimensions if the window is too large or too small.
+  sizeGrWindow(12,9)
+  #pdf(file = "Plots/sampleClustering.pdf", width = 12, height = 9);
+  par(cex = 0.6);
+  par(mar = c(0,4,2,0))
+  plot(sampleTree, main = "Sample clustering to detect outliers", sub="", xlab="", cex.lab = 1.5,
+       cex.axis = 1.5, cex.main = 2)
+}
+module_cluster_plot <- function(network){
+  sizeGrWindow(12, 9)
+  # Convert labels to colors for plotting
+  mergedColors <- labels2colors(network[[2]]$colors)
+  # Plot the dendrogram and the module colors underneath
+  plotDendroAndColors(network[[2]]$dendrograms[[1]], mergedColors[network[[2]]$blockGenes[[1]]],
+                      "Module colors",
+                      dendroLabels = FALSE, hang = 0.03,
+                      addGuide = TRUE, guideHang = 0.05)  
 }
 
 # STRING function ====

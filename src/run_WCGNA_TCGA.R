@@ -8,6 +8,7 @@ pr_name <- "LIHC"
 
 # weighted gene co-expression network costruction
 network <- network_preprocessing(pr_name = "LIHC", robustdegs = robustdegs)
+module_cluster_plot(network = network)
 
 # network variable
 moduleLabels <- network[[2]]$colors
@@ -16,11 +17,11 @@ MEs <- network[[2]]$MEs;
 geneTree <- network[[2]]$dendrograms[[1]]
 
 # Calculate ME
-MEs0 <- moduleEigengenes(robustdeg_ge, moduleColors)$eigengenes
+MEs0 <- moduleEigengenes(network[[1]], moduleColors)$eigengenes
 MEs <- orderMEs(MEs0)
     
 
-find_key_modulegene <- function(network, MEs, select_clinical=NULL,){
+find_key_modulegene <- function(network, MEs, select_clinical=NULL){
   
   # variable
   expression_sample <- rownames(network[[1]])
@@ -118,7 +119,17 @@ find_key_modulegene <- function(network, MEs, select_clinical=NULL,){
   #   select(MM_median) %>% 
   #   rownames_to_column("gene")
   
-  geneTraitSignificance <- as.data.frame(cor(robustdeg_ge, s_type, use = "p"))
+  gene_module_key <- network[[2]]$colors %>% names() %>% tibble(gene = .) %>% 
+    bind_cols(., tibble(module = moduleColors))
+  
+  
+  gene_module_key %>% filter(module %in% signModule) %>% View()
+  
+  
+  trait <- data_trait[s_type]
+  names(trait) <- s_type
+
+  geneTraitSignificance <- as.data.frame(cor(network[[1]], trait, use = "p"))
   GSPvalue <- as.data.frame(corPvalueStudent(as.matrix(geneTraitSignificance), nSamples))
   
   # Module membership
@@ -210,29 +221,7 @@ intra_analysis_hub <- intra_module %>%
 
 # collection of plot
 {
-  # plot - sample cluster
-  {
-    sampleTree <-  hclust(dist(robustdeg_ge), method = "average");
-    # Plot the sample tree: Open a graphic output window of size 12 by 9 inches
-    # The user should change the dimensions if the window is too large or too small.
-    sizeGrWindow(12,9)
-    #pdf(file = "Plots/sampleClustering.pdf", width = 12, height = 9);
-    par(cex = 0.6);
-    par(mar = c(0,4,2,0))
-    plot(sampleTree, main = "Sample clustering to detect outliers", sub="", xlab="", cex.lab = 1.5,
-         cex.axis = 1.5, cex.main = 2)
-  }
-  # plot - module cluster
-  {
-    sizeGrWindow(12, 9)
-    # Convert labels to colors for plotting
-    mergedColors <- labels2colors(net$colors)
-    # Plot the dendrogram and the module colors underneath
-    plotDendroAndColors(net$dendrograms[[1]], mergedColors[net$blockGenes[[1]]],
-                        "Module colors",
-                        dendroLabels = FALSE, hang = 0.03,
-                        addGuide = TRUE, guideHang = 0.05)
-  }
+
   # plot - module-trait relationships
   {
     sizeGrWindow(10,6)
@@ -265,4 +254,4 @@ intra_analysis_hub <- intra_module %>%
                        main = paste("Module membership vs. gene significance\n"),
                        cex.main = 1.2, cex.lab = 1.2, cex.axis = 1.2, col = module)
   }
-}
+  }

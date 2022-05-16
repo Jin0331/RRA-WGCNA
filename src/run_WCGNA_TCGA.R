@@ -8,17 +8,25 @@ pr_name <- "LIHC"
 
 # weighted gene co-expression network costruction
 network_list <- list()
+max_module_cnt <- 0
+max_module <- NULL
 
 # module cnt test
-for(mch_value in seq(from = 0.04, to = 0.5, by = 0.02)){
-  network <- network_preprocessing(pr_name = "LIHC", robustdegs = robustdegs, mch = 0.2)
+for(mch_value in seq(from = 0.1, to = 0.4, by = 0.02)){
+  print(paste0("mch_value : ", mch_value))
+  network <- network_preprocessing(pr_name = "LIHC", robustdegs = robustdegs, mch = mch_value)
   module_cnt <- length(network[[2]]$colors %>% unique()) - 1
   
+  if(max_module_cnt <= module_cnt){
+    max_module_cnt <- module_cnt
+    max_module <- as.character(mch_value)
+  }
   network_list[[as.character(mch_value)]] <- list(network, module_cnt)
 }
+module_cluster_plot(network = network_list$`0.16`[[1]])
 
 network <- network_preprocessing(pr_name = "LIHC", robustdegs = robustdegs, mch = 0.2)
-module_cluster_plot(network = network)
+
 
 # network variable
 moduleLabels <- network[[2]]$colors

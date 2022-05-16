@@ -485,7 +485,7 @@ network_preprocessing <- function(pr_name, robustdegs, mch = 0.25){
                             pamRespectsDendro = FALSE,
                             saveTOMs = TRUE,
                             saveTOMFileBase = paste0(log_save, "/TCGA-", pr_name),
-                            verbose = 3)
+                            verbose = 0)
     
   })
     
@@ -513,6 +513,26 @@ module_cluster_plot <- function(network){
                       "Module colors",
                       dendroLabels = FALSE, hang = 0.03,
                       addGuide = TRUE, guideHang = 0.05)  
+}
+module_trait_plot <- function(moduleTraitCor, moduleTraitPvalue, data_trait, MEs){
+  sizeGrWindow(10,6)
+  # Will display correlations and their p-values
+  textMatrix = paste(signif(moduleTraitCor, 2), "\n(",
+                     signif(moduleTraitPvalue, 1), ")", sep = "");
+  dim(textMatrix) = dim(moduleTraitCor)
+  par(mar = c(6, 8.5, 3, 3));
+  # Display the correlation values within a heatmap plot
+  labeledHeatmap(Matrix = moduleTraitCor,
+                 xLabels = names(data_trait),
+                 yLabels = names(MEs),
+                 ySymbols = names(MEs),
+                 colorLabels = FALSE,
+                 colors = greenWhiteRed(50),
+                 textMatrix = textMatrix,
+                 setStdMargins = FALSE,
+                 cex.text = 0.5,
+                 zlim = c(-1,1),
+                 main = paste("Module-trait relationships"))
 }
 
 # STRING function ====

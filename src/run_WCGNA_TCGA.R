@@ -7,7 +7,17 @@ load(file = "RData/HCC_GEO_RobustDEGs_norm.RData")
 pr_name <- "LIHC"
 
 # weighted gene co-expression network costruction
-network <- network_preprocessing(pr_name = "LIHC", robustdegs = robustdegs)
+network_list <- list()
+
+# module cnt test
+for(mch_value in seq(from = 0.04, to = 0.5, by = 0.02)){
+  network <- network_preprocessing(pr_name = "LIHC", robustdegs = robustdegs, mch = 0.2)
+  module_cnt <- length(network[[2]]$colors %>% unique()) - 1
+  
+  network_list[[as.character(mch_value)]] <- list(network, module_cnt)
+}
+
+network <- network_preprocessing(pr_name = "LIHC", robustdegs = robustdegs, mch = 0.2)
 module_cluster_plot(network = network)
 
 # network variable
@@ -73,6 +83,9 @@ find_key_modulegene <- function(network, MEs, select_clinical=NULL){
   # module relation calculation 
   moduleTraitCor <-  WGCNA::cor(MEs, data_trait, use = "p")
   moduleTraitPvalue <-  corPvalueStudent(moduleTraitCor, nSamples)
+  module_trait_plot(moduleTraitCor = moduleTraitCor, moduleTraitPvalue = moduleTraitPvalue,
+                    data_trait = data_trait, MEs = MEs)
+  
   
   # top 3 sign. module
   signModule <- lapply(X = 1:nrow(moduleTraitPvalue), FUN = function(row_index){
@@ -221,28 +234,6 @@ intra_analysis_hub <- intra_module %>%
 
 # collection of plot
 {
-
-  # plot - module-trait relationships
-  {
-    sizeGrWindow(10,6)
-    # Will display correlations and their p-values
-    textMatrix = paste(signif(moduleTraitCor, 2), "\n(",
-                       signif(moduleTraitPvalue, 1), ")", sep = "");
-    dim(textMatrix) = dim(moduleTraitCor)
-    par(mar = c(6, 8.5, 3, 3));
-    # Display the correlation values within a heatmap plot
-    labeledHeatmap(Matrix = moduleTraitCor,
-                   xLabels = names(data_trait),
-                   yLabels = names(MEs),
-                   ySymbols = names(MEs),
-                   colorLabels = FALSE,
-                   colors = greenWhiteRed(50),
-                   textMatrix = textMatrix,
-                   setStdMargins = FALSE,
-                   cex.text = 0.5,
-                   zlim = c(-1,1),
-                   main = paste("Module-trait relationships"))
-  }
   # plot - GS & MM correlation 
   {
     sizeGrWindow(7, 7);

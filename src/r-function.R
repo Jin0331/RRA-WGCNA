@@ -415,7 +415,7 @@ mergecutheight_test <- function(pr_name, robustdegs){
   
   return(list(max_mch = max_module, max_module_cnt = max_module_cnt))
 }
-network_preprocessing <- function(pr_name, robustdegs, mch = 0.25){
+network_preprocessing <- function(pr_name, robustdegs, mch = 0.25, time_stamp){
   allowWGCNAThreads(nThreads = 15)
   
   suppressMessages({
@@ -489,7 +489,7 @@ network_preprocessing <- function(pr_name, robustdegs, mch = 0.25){
     
     # network construct
     # net construct
-    time_stamp <- Sys.time()
+    # time_stamp <- Sys.time()
     log_save <- paste("WGCNA_LOG", pr_name, time_stamp, sep = "/")
     dir.create(paste("WGCNA_LOG", pr_name, time_stamp, sep = "/"), showWarnings = FALSE, recursive = TRUE)
     net <- blockwiseModules(datExpr = robustdeg_ge, 
@@ -511,12 +511,14 @@ network_preprocessing <- function(pr_name, robustdegs, mch = 0.25){
   
   return(list(deg = robustdeg_ge, network = net))
 }
-find_key_modulegene <- function(network, MEs, select_clinical=NULL, mm=0.85, gs=0.2){
+find_key_modulegene <- function(pr_name, network, MEs, select_clinical=NULL, mm=0.85, gs=0.2, time_stamp){
   
   # variable
   expression_sample <- rownames(network[[1]])
   nGenes <- ncol(network[[1]])
   nSamples <- nrow(network[[1]])
+  log_save <- paste("WGCNA_LOG", pr_name, time_stamp, sep = "/")
+  dir.create(log_save, recursive = T, showWarnings = FALSE)
   
   # clinical feature
   # default_clinical <- c('sample_type', 'OS', 'OS.time', 'age_at_initial_pathologic_diagnosis', 'pathologic_T', 
@@ -550,8 +552,12 @@ find_key_modulegene <- function(network, MEs, select_clinical=NULL, mm=0.85, gs=
   # module relation calculation 
   moduleTraitCor <-  WGCNA::cor(MEs, data_trait, use = "p")
   moduleTraitPvalue <-  corPvalueStudent(moduleTraitCor, nSamples)
-  module_trait_plot(moduleTraitCor = moduleTraitCor, moduleTraitPvalue = moduleTraitPvalue,
-                    data_trait = data_trait, MEs = MEs)
+  
+  # sample_cluster_plot(network = network[[1]], clinical_trait = data_trait)
+  # module_cluster_plot(network = network)
+  # module_trait_plot(moduleTraitCor = moduleTraitCor, moduleTraitPvalue = moduleTraitPvalue,
+  #                   data_trait = data_trait, MEs = MEs)
+
   
   
   # top 3 sign. module
@@ -625,18 +631,24 @@ find_key_modulegene <- function(network, MEs, select_clinical=NULL, mm=0.85, gs=
       total_keyhub[[index]] <- tmp
   }
   
-  p <- ggVennDiagram::ggVennDiagram(x = total_keyhub) +
-    scale_fill_gradient(low = "#F4FAFE", high = "#4981BF") +
-    theme(legend.position = "none")
+  # plot save
+  sample_cluster_plot(network = network[[1]], clinical_trait = data_trait, save_path = log_save)
+  module_cluster_plot(network = network, save_path = log_save)
+  module_trait_plot(moduleTraitCor = moduleTraitCor, moduleTraitPvalue = moduleTraitPvalue,
+                    data_trait = data_trait, MEs = MEs, save_path = log_save)
+  gene_module_size_plot(gene_module_key_groph = gene_module_key %>% group_by(module) %>% 
+                          summarise(module_size = n()),
+                        save_path = log_save)
+  key_hub_intersection_plot(total_keyhub = total_keyhub, save_path = log_save)
+
   
-  ggsave(p, filename = "test.png")
+  total_keyhub <- total_keyhub %>% unlist() %>% unname() 
+  return(total_keyhub)
   
-  total_keyhub %>% unlist() %>% unname() %>% 
-    return()
   
 }
 
-sample_cluster_plot <- function(network){
+sample_cluster_plot <- function(network, clinical_trait, save_path){
   sampleTree <-  hclust(dist(network[[1]]), method = "average");
   # Plot the sample tree: Open a graphic output window of size 12 by 9 inches
   # The user should change the dimensions if the window is too large or too small.
@@ -644,25 +656,39 @@ sample_cluster_plot <- function(network){
   #pdf(file = "Plots/sampleClustering.pdf", width = 12, height = 9);
   par(cex = 0.6);
   par(mar = c(0,4,2,0))
-  plot(sampleTree, main = "Sample clustering to detect outliers", sub="", xlab="", cex.lab = 1.5,
-       cex.axis = 1.5, cex.main = 2)
+  # plot(sampleTree, main = "Sample clustering to detect outliers", sub="", xlab="", cex.lab = 1.5,
+  #      cex.axis = 1.5, cex.main = 2)
+  
+  traitColors <- numbers2colors(clinical_trait, signed = FALSE);
+  
+  png(paste0(save_path, "/sample_cluster.png"))
+  plotDendroAndColors(sampleTree, traitColors,
+                      groupLabels = names(clinical_trait),
+                      main = "Sample dendrogram and trait heatmap")
+  dev.off()
+  
+  
 }
-module_cluster_plot <- function(network){
+module_cluster_plot <- function(network, save_path){
   sizeGrWindow(12, 9)
   # Convert labels to colors for plotting
   mergedColors <- labels2colors(network[[2]]$colors)
   # Plot the dendrogram and the module colors underneath
+  
+  png(paste0(save_path, "/module_cluster.png"))
   plotDendroAndColors(network[[2]]$dendrograms[[1]], mergedColors[network[[2]]$blockGenes[[1]]],
                       "Module colors",
                       dendroLabels = FALSE, hang = 0.03,
                       addGuide = TRUE, guideHang = 0.05)  
+  dev.off()
 }
-module_trait_plot <- function(moduleTraitCor, moduleTraitPvalue, data_trait, MEs){
+module_trait_plot <- function(moduleTraitCor, moduleTraitPvalue, data_trait, MEs, save_path){
   sizeGrWindow(10,6)
   # Will display correlations and their p-values
   textMatrix = paste(signif(moduleTraitCor, 2), "\n(",
                      signif(moduleTraitPvalue, 1), ")", sep = "");
   dim(textMatrix) = dim(moduleTraitCor)
+  png(paste0(save_path, "/module_trait.png"))
   par(mar = c(6, 8.5, 3, 3));
   # Display the correlation values within a heatmap plot
   labeledHeatmap(Matrix = moduleTraitCor,
@@ -676,7 +702,40 @@ module_trait_plot <- function(moduleTraitCor, moduleTraitPvalue, data_trait, MEs
                  cex.text = 0.5,
                  zlim = c(-1,1),
                  main = paste("Module-trait relationships"))
+  dev.off()
 }
+gene_module_size_plot <- function(gene_module_key_groph, save_path){
+  p <- ggpubr::ggbarplot(gene_module_key_groph, x = "module", y = "module_size",
+                         color = "module",
+                         fill = "module",
+                         sort.val = "asc",
+                         sort.by.groups = FALSE,
+                         x.text.angle = 90,          # Rotate vertically x axis texts
+                         title = "Top3 Module Size",
+                         ylab = "Module Size",
+                         legend.title = "Module",
+                         rotate = TRUE,
+                         ggtheme = theme_minimal())
+  ggsave(p, filename = paste0(save_path, "/top3_modulesize.png"))
+}
+key_hub_intersection_plot <- function(total_keyhub, save_path){
+  p <- ggVennDiagram::ggVennDiagram(x = total_keyhub) +
+    scale_fill_gradient(low = "#F4FAFE", high = "#4981BF") +
+    theme(legend.position = "none")
+  
+  ggsave(p, filename = paste0(save_path, "/keyhubgene_intersection.png"))
+}
+
+# # plot - GS & MM correlation 
+# sizeGrWindow(7, 7);
+# par(mfrow = c(1,1));
+# verboseScatterplot(abs(geneModuleMembership[moduleGenes, column]),
+#                    abs(geneTraitSignificance[moduleGenes, 1]),
+#                    xlab = paste("Module Membership in", module, "module"),
+#                    ylab = "GS for sample type",
+#                    main = paste("Module membership vs. gene significance\n"),
+#                    cex.main = 1.2, cex.lab = 1.2, cex.axis = 1.2, col = module)
+
 
 # STRING function ====
 retry <- function(expr, isError=function(x) "try-error" %in% class(x), maxErrors=5, sleep=0) {

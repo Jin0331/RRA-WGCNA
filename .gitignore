@@ -18,3 +18,4 @@ src/.ipynb_checkpoints
 src/rcy3-connect.R
 src/db_connect.R
 src/test.R
+WGCNA_LOG/

@@ -512,7 +512,7 @@ network_preprocessing <- function(pr_name, robustdegs, mch = 0.25, time_stamp){
   
   return(list(deg = robustdeg_ge, network = net))
 }
-find_key_modulegene <- function(pr_name, network, MEs, select_clinical=NULL, mm=0.85, gs=0.3, time_stamp){
+find_key_modulegene <- function(pr_name, network, MEs, select_clinical=NULL, mm=0.85, gs=0.25, time_stamp){
   
   # variable
   expression_sample <- rownames(network[[1]])
@@ -632,6 +632,15 @@ find_key_modulegene <- function(pr_name, network, MEs, select_clinical=NULL, mm=
       total_keyhub[[index]] <- tmp
   }
   
+  total_keyhub_merge <- names(total_keyhub) %>% lapply(X = ., FUN = function(lname){
+    col_name <- lname %>% str_split(pattern = "\\.") %>% unlist %>% .[1]
+    
+    tibble(gene = total_keyhub[[lname]], col_name) %>% return()
+  }) %>% bind_rows() %>% 
+    split(x = ., f = .$col_name) %>% 
+    lapply(X = ., FUN = function(df){df %>% dplyr::pull(gene)})
+  
+  
   # plot save
   sample_cluster_plot(network = network[[1]], clinical_trait = data_trait, save_path = log_save)
   module_cluster_plot(network = network, save_path = log_save)
@@ -640,11 +649,11 @@ find_key_modulegene <- function(pr_name, network, MEs, select_clinical=NULL, mm=
   gene_module_size_plot(gene_module_key_groph = gene_module_key %>% group_by(module) %>% 
                           summarise(module_size = n()),
                         save_path = log_save)
-  key_hub_intersection_plot(total_keyhub = total_keyhub, save_path = log_save)
+  key_hub_intersection_plot(total_keyhub = total_keyhub_merge, save_path = log_save)
 
-  total_keyhub <- total_keyhub %>% unlist() %>% unname() %>% unique()
+  total_keyhub <- total_keyhub_merge %>% unlist() %>% unname() %>% unique()
   
-  return(list(total_keyhub = total_keyhub, clinical_trait = data_trait))
+  return(list(total_keyhub = total_keyhub_merge, clinical_trait = data_trait))
   
   
 }

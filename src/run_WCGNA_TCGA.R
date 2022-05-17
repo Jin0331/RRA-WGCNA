@@ -3,13 +3,13 @@ source("src/r-function.R")
 
 # LOCAL VARIABLE
 # rdata_path <- "RData/"
-load(file = "RData/HCC_GEO_RobustDEGs_norm.RData")
+# load(file = "RData/HCC_GEO_RobustDEGs_norm.RData")
 pr_name <- "LIHC"
 time_stamp <- Sys.time()
 
 # weighted gene co-expression network costruction
 mch_test <- purrr::quietly(mergecutheight_test)(pr_name = "LIHC", robustdegs = robustdegs)
-network <- network_preprocessing(pr_name = "LIHC", robustdegs = robustdegs, mch = mch_test$result$max_mch)
+network <- network_preprocessing(pr_name = "LIHC", robustdegs = robustdegs, mch = mch_test$result$max_mch,time_stamp = time_stamp)
 
 # network variable
 moduleLabels <- network[[2]]$colors

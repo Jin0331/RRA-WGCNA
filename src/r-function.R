@@ -11,6 +11,7 @@ suppressMessages({
   library(ggVennDiagram)
   library(tidyverse)
   library(WGCNA)
+  library(caret)
   
   use_condaenv(condaenv = "geo-py")
   source_python("src/py-function.py")
@@ -403,7 +404,7 @@ mergecutheight_test <- function(pr_name, robustdegs){
   
   for(mch_value in seq(from = 0.1, to = 0.4, by = 0.02)){
     print(paste0("mch_value : ", mch_value))
-    network <- network_preprocessing(pr_name = "LIHC", robustdegs = robustdegs, mch = mch_value)
+    network <- network_preprocessing(pr_name = "LIHC", robustdegs = robustdegs, mch = mch_value, time_stamp = "test")
     module_cnt <- length(network[[2]]$colors %>% unique()) - 1
     
     if(max_module_cnt <= module_cnt){
@@ -511,7 +512,7 @@ network_preprocessing <- function(pr_name, robustdegs, mch = 0.25, time_stamp){
   
   return(list(deg = robustdeg_ge, network = net))
 }
-find_key_modulegene <- function(pr_name, network, MEs, select_clinical=NULL, mm=0.85, gs=0.2, time_stamp){
+find_key_modulegene <- function(pr_name, network, MEs, select_clinical=NULL, mm=0.85, gs=0.3, time_stamp){
   
   # variable
   expression_sample <- rownames(network[[1]])
@@ -520,16 +521,6 @@ find_key_modulegene <- function(pr_name, network, MEs, select_clinical=NULL, mm=
   log_save <- paste("WGCNA_LOG", pr_name, time_stamp, sep = "/")
   dir.create(log_save, recursive = T, showWarnings = FALSE)
   
-  # clinical feature
-  # default_clinical <- c('sample_type', 'OS', 'OS.time', 'age_at_initial_pathologic_diagnosis', 'pathologic_T', 
-  #                       'pathologic_M', 'pathologic_N', 'pathologic_stage', 'child_pugh_classification_grade', 
-  #                       'fibrosis_ishak_score')
-  
-  default_clinical <- c('sample_type', 'OS.time', 'pathologic_T', 'pathologic_M', 'pathologic_N', 'pathologic_stage')
-  # default_clinical <- c('OS.time', 'pathologic_T', 'pathologic_M', 'pathologic_N', 'pathologic_stage')
-  
-  use_clinical <- c(default_clinical, select_clinical)
-  
   # UCSCXena clinical
   clinical_trait <- read_delim("https://tcga-xena-hub.s3.us-east-1.amazonaws.com/download/TCGA.LIHC.sampleMap%2FLIHC_clinicalMatrix",
                                delim = "\t", show_col_types = FALSE, progress = FALSE)
@@ -537,28 +528,38 @@ find_key_modulegene <- function(pr_name, network, MEs, select_clinical=NULL, mm=
                                delim = "\t", show_col_types = FALSE, progress = FALSE) %>% 
     dplyr::select(sample, OS, OS.time, DSS, DSS.time, DFI, DFI.time, PFI, PFI.time)
   
-  clinical_trait <- left_join(x = clinical_trait, y = survival_trait, by = c("sampleID" = "sample")) 
+  immune_trait <- read_delim("https://tcga-pancan-atlas-hub.s3.us-east-1.amazonaws.com/download/Subtype_Immune_Model_Based.txt.gz",
+                             delim = "\t", show_col_types = FALSE, progress = FALSE)
+  
+  molecular_trait <- read_delim("https://tcga-pancan-atlas-hub.s3.us-east-1.amazonaws.com/download/TCGASubtype.20170308.tsv.gz",
+                                delim = "\t", show_col_types = FALSE, progress = FALSE) %>% 
+    select(sampleID, Subtype_Integrative)
+  
+  clinical_trait <- left_join(x = clinical_trait, y = survival_trait, by = c("sampleID" = "sample")) %>% 
+    left_join(x = ., y = immune_trait, by = c("sampleID" = "sample")) %>% 
+    left_join(x = ., y = molecular_trait, by = "sampleID")
+  
+  default_clinical <- c('sample_type', 'pathologic_T', 'pathologic_M', 'pathologic_N', 'pathologic_stage', 'Subtype_Immune_Model_Based',
+                        'Subtype_Integrative')
+  use_clinical <- c(default_clinical, select_clinical)
   
   # clinical trait preprocessing
   traitRows <- match(expression_sample, clinical_trait$sampleID)
   data_trait <- clinical_trait[traitRows, ] %>% 
     column_to_rownames(var = "sampleID") %>% 
     dplyr::select(all_of(use_clinical)) %>% 
-    # mutate(sample_type = ifelse(sample_type == "Primary Tumor", 1, 0)) %>%  # sample type 한정
-    mutate_if(is.character, as.factor) %>% 
-    mutate_all(as.numeric)
+    mutate(sample_type = ifelse(sample_type == "Primary Tumor", 1, 0)) %>%  # sample type 한정
+    mutate_if(is.character, as.factor)
+  # data_trait[is.na(data_trait)] <- 0
+  
+  # category to binary
+  dummy <- dummyVars(" ~ .", data=data_trait)
+  data_trait <- data.frame(predict(dummy, newdata=data_trait))
   data_trait[is.na(data_trait)] <- 0
   
   # module relation calculation 
   moduleTraitCor <-  WGCNA::cor(MEs, data_trait, use = "p")
   moduleTraitPvalue <-  corPvalueStudent(moduleTraitCor, nSamples)
-  
-  # sample_cluster_plot(network = network[[1]], clinical_trait = data_trait)
-  # module_cluster_plot(network = network)
-  # module_trait_plot(moduleTraitCor = moduleTraitCor, moduleTraitPvalue = moduleTraitPvalue,
-  #                   data_trait = data_trait, MEs = MEs)
-
-  
   
   # top 3 sign. module
   signModule <- lapply(X = 1:nrow(moduleTraitPvalue), FUN = function(row_index){
@@ -586,7 +587,7 @@ find_key_modulegene <- function(pr_name, network, MEs, select_clinical=NULL, mm=
   
   # Gene significance
   # gene significance
-  GS <- lapply(X =  use_clinical, FUN = function(s_type){
+  GS <- lapply(X =  data_trait %>% colnames(), FUN = function(s_type){
     trait <- data_trait[s_type]
     names(trait) <- s_type
     
@@ -612,17 +613,17 @@ find_key_modulegene <- function(pr_name, network, MEs, select_clinical=NULL, mm=
       filter(gene %in% module_gene, abs(MM) > mm)
     module_MM_gene <- module_MM %>% dplyr::pull(gene)
     
-    module_MM_GS_filtered <- lapply(X = use_clinical, FUN = function(t){
+    module_MM_GS_filtered <- lapply(X = data_trait %>% colnames(), FUN = function(t){
       GS %>% 
         select(gene, GS = t) %>% 
         filter(gene %in% module_MM_gene, abs(GS) > gs)})
-    names(module_MM_GS_filtered) <- use_clinical
+    names(module_MM_GS_filtered) <- data_trait %>% colnames()
     
     return(module_MM_GS_filtered)
   })
   
   total_keyhub <- list()
-  for(index in use_clinical){
+  for(index in data_trait %>% colnames()){
     tmp <- lapply(X = intra_module, FUN = function(trait){
       trait[[index]]
     }) %>% bind_rows() %>% dplyr::pull(gene)
@@ -641,9 +642,9 @@ find_key_modulegene <- function(pr_name, network, MEs, select_clinical=NULL, mm=
                         save_path = log_save)
   key_hub_intersection_plot(total_keyhub = total_keyhub, save_path = log_save)
 
+  total_keyhub <- total_keyhub %>% unlist() %>% unname() %>% unique()
   
-  total_keyhub <- total_keyhub %>% unlist() %>% unname() 
-  return(total_keyhub)
+  return(list(total_keyhub = total_keyhub, clinical_trait = data_trait))
   
   
 }
@@ -737,6 +738,7 @@ key_hub_intersection_plot <- function(total_keyhub, save_path){
 #                    cex.main = 1.2, cex.lab = 1.2, cex.axis = 1.2, col = module)
 
 
+# Machine learning function ====
 # STRING function ====
 retry <- function(expr, isError=function(x) "try-error" %in% class(x), maxErrors=5, sleep=0) {
   attempts = 0

@@ -653,7 +653,7 @@ find_key_modulegene <- function(pr_name, network, MEs, select_clinical=NULL, mm=
 
   total_keyhub <- total_keyhub_merge %>% unlist() %>% unname() %>% unique()
   
-  return(list(total_keyhub = total_keyhub_merge, clinical_trait = data_trait))
+  return(list(total_keyhub = total_keyhub, clinical_trait = data_trait, network = network))
   
   
 }

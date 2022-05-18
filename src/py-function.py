@@ -63,7 +63,7 @@ def feature_selection_LASSO(X, Y):
                     
   # grid search
   search = GridSearchCV(pipeline,
-                      {'model__alpha':np.arange(0.001,5,0.001)},
+                      {'model__alpha':np.arange(0.01,5,0.001)},
                       cv = 10, scoring="neg_mean_squared_error",verbose=1
                       )
                       
@@ -71,7 +71,8 @@ def feature_selection_LASSO(X, Y):
 
   print(search.best_params_)
   coefficients = search.best_estimator_.named_steps['model'].coef_
-  importance = np.abs(coefficients)
+  # importance = np.abs(coefficients)
+  importance = coefficients
   
   return importance
 

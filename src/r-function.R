@@ -671,7 +671,7 @@ sample_cluster_plot <- function(network, clinical_trait, save_path){
   
   traitColors <- numbers2colors(clinical_trait, signed = FALSE);
   
-  png(paste0(save_path, "/sample_cluster.png"))
+  png(paste0(save_path, "/sample_cluster.png"), width = 1000, height = 1000)
   plotDendroAndColors(sampleTree, traitColors,
                       groupLabels = names(clinical_trait),
                       main = "Sample dendrogram and trait heatmap")
@@ -685,7 +685,7 @@ module_cluster_plot <- function(network, save_path){
   mergedColors <- labels2colors(network[[2]]$colors)
   # Plot the dendrogram and the module colors underneath
   
-  png(paste0(save_path, "/module_cluster.png"))
+  png(paste0(save_path, "/module_cluster.png"), width = 1000, height = 1000)
   plotDendroAndColors(network[[2]]$dendrograms[[1]], mergedColors[network[[2]]$blockGenes[[1]]],
                       "Module colors",
                       dendroLabels = FALSE, hang = 0.03,
@@ -698,7 +698,7 @@ module_trait_plot <- function(moduleTraitCor, moduleTraitPvalue, data_trait, MEs
   textMatrix = paste(signif(moduleTraitCor, 2), "\n(",
                      signif(moduleTraitPvalue, 1), ")", sep = "");
   dim(textMatrix) = dim(moduleTraitCor)
-  png(paste0(save_path, "/module_trait.png"))
+  png(paste0(save_path, "/module_trait.png"), width = 1000, height = 1000)
   par(mar = c(6, 8.5, 3, 3));
   # Display the correlation values within a heatmap plot
   labeledHeatmap(Matrix = moduleTraitCor,
@@ -727,13 +727,16 @@ gene_module_size_plot <- function(gene_module_key_groph, save_path){
                          rotate = TRUE,
                          ggtheme = theme_minimal())
   ggsave(p, filename = paste0(save_path, "/top3_modulesize.png"))
+  return(p)
 }
 key_hub_intersection_plot <- function(total_keyhub, save_path){
-  p <- ggVennDiagram::ggVennDiagram(x = total_keyhub) +
+  
+  p <- ggVennDiagram::ggVennDiagram(x = total_keyhub, label_size = 7) +
     scale_fill_gradient(low = "#F4FAFE", high = "#4981BF") +
     theme(legend.position = "none")
   
-  ggsave(p, filename = paste0(save_path, "/keyhubgene_intersection.png"))
+  ggsave(p, filename = paste0(save_path, "/keyhubgene_intersection.png"), dpi = 200, width = 30, height = 10)
+  return(p)
 }
 
 # # plot - GS & MM correlation 

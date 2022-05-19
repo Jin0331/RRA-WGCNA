@@ -540,7 +540,7 @@ find_key_modulegene <- function(pr_name, network, MEs, select_clinical=NULL, mm=
     left_join(x = ., y = immune_trait, by = c("sampleID" = "sample")) %>% 
     left_join(x = ., y = molecular_trait, by = "sampleID")
   
-  default_clinical <- c('sample_type', 'pathologic_T', 'pathologic_M', 'pathologic_N', 'pathologic_stage', 'Subtype_Immune_Model_Based',
+  default_clinical <- c('sample_type', 'pathologic_stage', 'Subtype_Immune_Model_Based',
                         'Subtype_Integrative')
   use_clinical <- c(default_clinical, select_clinical)
   
@@ -551,7 +551,8 @@ find_key_modulegene <- function(pr_name, network, MEs, select_clinical=NULL, mm=
     dplyr::select(all_of(use_clinical)) %>% 
     mutate(sample_type = ifelse(sample_type == "Primary Tumor", 1, 0),
            pathologic_stage = str_remove_all(string = pathologic_stage, pattern = "A|B|C"),
-           pathologic_T = str_remove_all(string = pathologic_T, pattern = "a|b")) %>%  # sample type 한정, pathogenic stage
+           # pathologic_T = str_remove_all(string = pathologic_T, pattern = "a|b")
+           ) %>%  # sample type 한정, pathogenic stage
     replace(is.na(.), 0) %>% 
     mutate_all(as.factor) %>% 
     mutate_all(as.numeric) %>% 
@@ -660,7 +661,7 @@ find_key_modulegene <- function(pr_name, network, MEs, select_clinical=NULL, mm=
 
   total_keyhub <- total_keyhub_merge %>% unlist() %>% unname() %>% unique()
   
-  return(list(total_keyhub = total_keyhub, clinical_trait = data_trait, network = network))
+  return(list(total_keyhub = total_keyhub, clinical_trait = data_trait, total_keyhub_merge = total_keyhub_merge, network = network))
   
   
 }

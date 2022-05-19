@@ -636,7 +636,7 @@ find_key_modulegene <- function(pr_name, network, MEs, select_clinical=NULL, mm=
       trait[[index]]
     }) %>% bind_rows() %>% dplyr::pull(gene)
     
-    if(length(tmp) != 0)
+    if(length(tmp) > 1)
       total_keyhub[[index]] <- tmp
   }
   
@@ -759,6 +759,36 @@ key_hub_intersection_plot <- function(total_keyhub, save_path){
 
 
 # Machine learning function ====
+gene_selection <- function(total_keyhub_list){
+  trait_name <- total_keyhub_list %>% names()
+  gene_selection_list <- list()
+  
+  for(trait_name in total_keyhub_list %>% names()){
+    Y_col_name <- trait_name
+    DF <- clinical_trait %>% 
+      select(Y_col_name) %>%
+      rownames_to_column(var = "sample") %>% 
+      inner_join(x = ., y = geneExpression %>% 
+                   rownames_to_column(var = "sample") %>% 
+                   select(sample, all_of(total_keyhub_list[[Y_col_name]])),
+                 by = "sample") %>% 
+      column_to_rownames(var = "sample")
+    
+    # X, y 분리
+    y_df <- DF %>% select(-all_of(total_keyhub_list[[Y_col_name]]))
+    x_df <- DF %>% select_at(all_of(total_keyhub_list[[Y_col_name]]))
+    
+    # gene selection
+    lasso_coef <- feature_selection_LASSO(x_df, y_df)
+    lasso_selection_gene <- x_df %>% select(which(abs(lasso_coef) > 0)) %>% colnames()
+    
+    gene_selection_list[[trait_name]] <- lasso_selection_gene
+  }
+  
+  return(gene_selection_list)
+  
+}
+
 # STRING function ====
 retry <- function(expr, isError=function(x) "try-error" %in% class(x), maxErrors=5, sleep=0) {
   attempts = 0

@@ -12,7 +12,8 @@ from sklearn.model_selection import RandomizedSearchCV
 from sklearn.model_selection import train_test_split, GridSearchCV, RepeatedStratifiedKFold, StratifiedKFold
 from sklearn.linear_model import Lasso
 from sklearn.impute import KNNImputer
-from sklearn.svm import SVC
+from sklearn.svm import SVC,SVR
+
 from pycaret.classification import *
 
 def ml_validation(DF):

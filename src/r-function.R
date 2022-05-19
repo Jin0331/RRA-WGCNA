@@ -11,6 +11,7 @@ suppressMessages({
   library(ggVennDiagram)
   library(tidyverse)
   library(WGCNA)
+  library(CorLevelPlot)
   library(caret)
   
   use_condaenv(condaenv = "geo-py")
@@ -512,7 +513,7 @@ network_preprocessing <- function(pr_name, robustdegs, mch = 0.25, time_stamp){
   
   return(list(deg = robustdeg_ge, network = net))
 }
-find_key_modulegene <- function(pr_name, network, MEs, select_clinical=NULL, mm=0.85, gs=0.25, time_stamp){
+find_key_modulegene <- function(pr_name, network, MEs, select_clinical=NULL, mm=0.85, gs=0.25, time_stamp, binarytocategory=FALSE){
   
   # variable
   expression_sample <- rownames(network[[1]])
@@ -548,14 +549,20 @@ find_key_modulegene <- function(pr_name, network, MEs, select_clinical=NULL, mm=
   data_trait <- clinical_trait[traitRows, ] %>% 
     column_to_rownames(var = "sampleID") %>% 
     dplyr::select(all_of(use_clinical)) %>% 
-    mutate(sample_type = ifelse(sample_type == "Primary Tumor", 1, 0)) %>%  # sample type 한정
-    mutate_if(is.character, as.factor)
-  # data_trait[is.na(data_trait)] <- 0
-  
-  # category to binary
-  dummy <- dummyVars(" ~ .", data=data_trait)
-  data_trait <- data.frame(predict(dummy, newdata=data_trait))
-  data_trait[is.na(data_trait)] <- 0
+    mutate(sample_type = ifelse(sample_type == "Primary Tumor", 1, 0),
+           pathologic_stage = str_remove_all(string = pathologic_stage, pattern = "A|B|C"),
+           pathologic_T = str_remove_all(string = pathologic_T, pattern = "a|b")) %>%  # sample type 한정, pathogenic stage
+    replace(is.na(.), 0) %>% 
+    mutate_all(as.factor) %>% 
+    mutate_all(as.numeric) %>% 
+    mutate_all(function(value){value - 1})
+
+  # binary to category
+  if(binarytocategory){
+    # category to binary
+    dummy <- dummyVars(" ~ .", data=data_trait)
+    data_trait <- data.frame(predict(dummy, newdata=data_trait))  
+  }
   
   # module relation calculation 
   moduleTraitCor <-  WGCNA::cor(MEs, data_trait, use = "p")

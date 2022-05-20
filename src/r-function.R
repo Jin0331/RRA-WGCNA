@@ -557,6 +557,20 @@ find_key_modulegene <- function(pr_name, network, MEs, select_clinical=NULL, mm=
     mutate_all(as.factor) %>% 
     mutate_all(as.numeric) %>% 
     mutate_all(function(value){value - 1})
+  
+  # remove trait element. less than 5%
+  for(col_name in data_trait %>% colnames()){
+    remove_trait <- data_trait[2] %>% 
+      group_by_at(1) %>% 
+      summarise(prop = n()) %>% 
+      mutate(prop = prop / sum(prop)) %>% 
+      filter(prop < 0.05) %>% 
+      dplyr::pull(1)
+    
+    if(length(remove_trait) > 0){
+      data_trait[[col_name]] <- ifelse(data_trait[[col_name]] %in% remove_trait, 0, data_trait[[col_name]]) 
+    }
+  }
 
   # binary to category
   if(binarytocategory){
@@ -759,11 +773,15 @@ key_hub_intersection_plot <- function(total_keyhub, save_path){
 
 
 # Machine learning function ====
-gene_selection <- function(total_keyhub_list){
-  trait_name <- total_keyhub_list %>% names()
+gene_selection <- function(pr_name, total_keyhub_list, time_stamp){
+  
+  log_save <- paste("ML_LOG", pr_name, time_stamp, sep = "/")
+  dir.create(log_save, recursive = T, showWarnings = FALSE)
+  
+  trait_names <- total_keyhub_list %>% names()
   gene_selection_list <- list()
   
-  for(trait_name in total_keyhub_list %>% names()){
+  for(trait_name in trait_names){
     Y_col_name <- trait_name
     DF <- clinical_trait %>% 
       select(Y_col_name) %>%
@@ -785,9 +803,24 @@ gene_selection <- function(total_keyhub_list){
     gene_selection_list[[trait_name]] <- lasso_selection_gene
   }
   
+  # venn diagram
+  seleted_gene_intersection_plot(gene_selection_list, log_save)
+  
+  
   return(gene_selection_list)
   
 }
+
+seleted_gene_intersection_plot <- function(gene_selection_list, save_path){
+  
+  p <- ggVennDiagram::ggVennDiagram(x = gene_selection_list, label_size = 7) +
+    scale_fill_gradient(low = "#F4FAFE", high = "#4981BF") +
+    theme(legend.position = "none")
+  
+  ggsave(p, filename = paste0(save_path, "/seleted_gene_intersection.png"), dpi = 200, width = 30, height = 10)
+  return(p)
+}
+
 
 # STRING function ====
 retry <- function(expr, isError=function(x) "try-error" %in% class(x), maxErrors=5, sleep=0) {

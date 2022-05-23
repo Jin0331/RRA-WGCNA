@@ -8,7 +8,7 @@ clinical_trait <- key_hub_gene$clinical_trait
 geneExpression <- key_hub_gene$network$deg
 
 # gene selection
-selected_gene <- gene_selection(total_keyhub_list = total_keyhub_list)
+selected_gene <- gene_selection(total_keyhub_list = total_keyhub_list, pr_name = "LIHC", time_stamp = time_stamp)
 
 
 

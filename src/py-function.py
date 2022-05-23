@@ -5,11 +5,10 @@ import os
 import datetime
 from requests import get
 from pathlib import Path
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, label_binarize
 from sklearn.pipeline import Pipeline
 from sklearn.feature_selection import RFECV
-from sklearn.model_selection import RandomizedSearchCV
-from sklearn.model_selection import train_test_split, GridSearchCV, RepeatedStratifiedKFold, StratifiedKFold
+from sklearn.model_selection import train_test_split, GridSearchCV, RepeatedStratifiedKFold, StratifiedKFold, RandomizedSearchCV
 from sklearn.linear_model import Lasso
 from sklearn.impute import KNNImputer
 from sklearn.svm import SVC,SVR
@@ -56,28 +55,45 @@ def feature_selection_svm_rfecv(X,Y):
   return CV_rfc.best_estimator_.support_
   
   
-def feature_selection_LASSO(X, Y):
-  # ML pipeline
-  pipeline = Pipeline([
+def feature_selection_LASSO(X, y):
+    num_class = set(y)
+
+    if len(num_class) > 2:
+        y = label_binarize(y, classes=list(num_class))
+
+        # ML pipeline
+        pipeline = Pipeline([
                      ('scaler',StandardScaler()),
-                     ('model',Lasso(max_iter=99999))])
-                    
-  # grid search
-  search = GridSearchCV(pipeline,
-                      {'model__alpha':np.arange(0.01,5,0.001)},
+                     ('model', OneVsRestClassifier(Lasso(max_iter=99999)))])
+
+        # grid search
+        search = GridSearchCV(pipeline,
+                      {'model__estimator__alpha':np.arange(0.01,3,0.001)},
                       cv = 10, scoring="neg_mean_squared_error",verbose=1
                       )
-                      
-  search.fit(X,Y.values.ravel())
 
-  print(search.best_params_)
-  coefficients = search.best_estimator_.named_steps['model'].coef_
-  # importance = np.abs(coefficients)
-  importance = coefficients
-  
-  return importance
+        search.fit(X,y)
 
+        print(search.best_params_)
+        coefficients = pd.DataFrame(search.best_estimator_.named_steps.model.coef_)
+        return coefficients.abs().sum().to_list()
 
+    else :
+        pipeline = Pipeline([
+                     ('scaler',StandardScaler()),
+                     ('model',Lasso(max_iter=99999))])
+
+        # grid search
+        search = GridSearchCV(pipeline,
+                          {'model__alpha':np.arange(0.01,3,0.001)},
+                          cv = 10, scoring="neg_mean_squared_error",verbose=1
+                          )
+
+        search.fit(X,y.values.ravel())
+
+        print(search.best_params_)
+        coefficients = search.best_estimator_.named_steps['model'].coef_
+        return coefficients
 
 def load_tcga_dataset(pkl_path, raw_path, cancer_type):   
   # subfunction

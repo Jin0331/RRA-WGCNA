@@ -24,3 +24,4 @@ MEs <- orderMEs(MEs0)
 key_hub_gene <- find_key_modulegene(pr_name = "LIHC", network = network, 
                                     MEs = MEs, time_stamp = time_stamp,
                                     mm = 0.85, gs = 0.2)
+

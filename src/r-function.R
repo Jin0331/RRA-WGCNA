@@ -560,7 +560,7 @@ find_key_modulegene <- function(pr_name, network, MEs, select_clinical=NULL, mm=
   
   # remove trait element. less than 5%
   for(col_name in data_trait %>% colnames()){
-    remove_trait <- data_trait[2] %>% 
+    remove_trait <- data_trait[col_name] %>% 
       group_by_at(1) %>% 
       summarise(prop = n()) %>% 
       mutate(prop = prop / sum(prop)) %>% 

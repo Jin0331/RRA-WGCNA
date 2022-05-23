@@ -84,7 +84,7 @@ def roc_acu_calculator(DF, feature_name, log_save):
     plt.ylim([0.0, 1.05])
     plt.xlabel('False Positive Rate (FPR)')
     plt.ylabel('True Positive Rate (TPR)')
-    plt.title(feature_name + "_Multi-class")
+    plt.title(feature_name + " (Multi-class)")
     plt.legend(loc="lower right")
     plt.savefig(log_save + "/" + feature_name + '_ROC_AUC.png')
     plt.clf()
@@ -94,7 +94,7 @@ def roc_acu_calculator(DF, feature_name, log_save):
     macro_roc_auc_ovr = roc_auc_score(y_test, y_prob, multi_class="ovr", average="macro")
     micro_roc_auc_ovr = roc_auc_score(
         y_test, y_prob, multi_class="ovr", average="micro")
-    return {'macro' : macro_roc_auc_ovr, 'micro': weighted_roc_auc_ovr}
+    return {'macro' : macro_roc_auc_ovr, 'micro': micro_roc_auc_ovr}
     return macro_roc_auc_ovr
   else :
     fpr, tpr, thres = roc_curve(y_test, y_score)
@@ -107,7 +107,7 @@ def roc_acu_calculator(DF, feature_name, log_save):
     plt.plot([0, 1], [0, 1], color='navy', lw=lw, linestyle='--')
     plt.xlabel('False Positive Rate (FPR)')
     plt.ylabel('True Positive Rate (TPR)')
-    plt.title(feature_name)
+    plt.title(feature_name + " (Binary-class")
     plt.legend(loc="best")
     plt.savefig(log_save + "/" + feature_name + '_ROC_AUC.png')
     plt.clf()

@@ -834,6 +834,28 @@ ml_validation <- function(pr_name, selected_gene, time_stamp){
   return(roc_auc_list)
   
 }
+auc_cutoff <- function(sg_list, auc_cutoff = 0.75){
+  clinical_name <- sg_list %>% names()
+  auc_cutoff_gene <- lapply(X = clinical_name, FUN = function(list_name){
+    value <- sg_list[[list_name]]
+    
+    if(length(value) >= 2){
+      if(value$micro >= auc_cutoff){
+        return(list_name)
+      }
+    } else {
+      if(value >= auc_cutoff){
+        return(list_name)
+      }
+    }
+  }) %>% unlist() %>% 
+    selected_gene[.] %>% 
+    unlist() %>% 
+    unique()
+  
+  return(auc_cutoff_gene)
+}
+
 seleted_gene_intersection_plot <- function(gene_selection_list, save_path){
   
   p <- ggVennDiagram::ggVennDiagram(x = gene_selection_list, label_size = 7) +

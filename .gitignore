@@ -20,3 +20,4 @@ src/db_connect.R
 src/test.R
 WGCNA_LOG/
 ML_LOG/
+.ipynb_checkpoints/

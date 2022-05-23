@@ -784,7 +784,7 @@ gene_selection <- function(pr_name, total_keyhub_list, time_stamp){
   for(trait_name in trait_names){
     Y_col_name <- trait_name
     DF <- clinical_trait %>% 
-      select(Y_col_name) %>%
+      select(all_of(Y_col_name)) %>%
       rownames_to_column(var = "sample") %>% 
       inner_join(x = ., y = geneExpression %>% 
                    rownames_to_column(var = "sample") %>% 
@@ -810,7 +810,30 @@ gene_selection <- function(pr_name, total_keyhub_list, time_stamp){
   return(gene_selection_list)
   
 }
-
+ml_validation <- function(pr_name, selected_gene, time_stamp){
+  
+  log_save <- paste("ML_LOG", pr_name, time_stamp, sep = "/")
+  dir.create(log_save, recursive = T, showWarnings = FALSE)
+  trait_names <- selected_gene %>% names()
+  
+  roc_auc_list <- list()
+  for(trait_name in trait_names){
+    Y_col_name <- trait_name
+    DF <- clinical_trait %>% 
+      select(Y_col_name) %>%
+      rownames_to_column(var = "sample") %>% 
+      inner_join(x = ., y = geneExpression %>% 
+                   rownames_to_column(var = "sample") %>% 
+                   select(sample, all_of(selected_gene[[Y_col_name]])),
+                 by = "sample") %>% 
+      column_to_rownames(var = "sample")
+    # gene selection
+    roc_auc_list[[trait_name]] <- roc_acu_calculator(DF, Y_col_name, log_save)
+  }
+  
+  return(roc_auc_list)
+  
+}
 seleted_gene_intersection_plot <- function(gene_selection_list, save_path){
   
   p <- ggVennDiagram::ggVennDiagram(x = gene_selection_list, label_size = 7) +

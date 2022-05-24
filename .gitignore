@@ -8,6 +8,7 @@ RData/
 GSE/
 GDCdata/
 *.txt
+*.csv
 *.sqlite*
 .Rproj.user
 RAW_DATA/

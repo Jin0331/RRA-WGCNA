@@ -17,12 +17,17 @@ from sklearn.multiclass import OneVsRestClassifier
 from sklearn.metrics import roc_auc_score, roc_curve, auc
 import matplotlib.pyplot as plt
 from scipy import interp
-from pycaret.classification import *
+from imblearn.over_sampling import SMOTE
 
-def roc_acu_calculator(DF, feature_name, log_save):
+def roc_acu_calculator(DF, feature_name, log_save, over_sampling):
   X = DF.iloc[:, 1:]
   y = DF.iloc[:, 0]
   
+  # SMOTE oversampling for minority
+  if over_sampling:
+    sm = SMOTE("minority", random_state=331)
+    X, y = sm.fit_resample(X,y)
+    
   # multi-class detection
   num_class = set(y)
   if len(num_class) > 2:
@@ -64,19 +69,19 @@ def roc_acu_calculator(DF, feature_name, log_save):
     lw = 2
     plt.figure(figsize=(10,10))
     plt.plot(fpr["micro"], tpr["micro"],
-             label='micro-average ROC curve (area = {0:0.2f})'
+             label='micro-average ROC curve (area = {0:0.4f})'
                    ''.format(roc_auc["micro"]),
              color='deeppink', linestyle=':', linewidth=4)
 
     plt.plot(fpr["macro"], tpr["macro"],
-             label='macro-average ROC curve (area = {0:0.2f})'
+             label='macro-average ROC curve (area = {0:0.4f})'
                    ''.format(roc_auc["macro"]),
              color='navy', linestyle=':', linewidth=4)
 
     colors = cycle(['aqua', 'darkorange', 'darkgreen', 'violet', 'peru', 'gold'])
     for i, color in zip(range(len(num_class)), colors):
         plt.plot(fpr[i], tpr[i], color=color, lw=lw,
-                 label='ROC curve of class {0} (AUC={1:0.2f})'
+                 label='ROC curve of class {0} (AUC={1:0.4f})'
                  ''.format(i, roc_auc[i]))
 
     plt.plot([0, 1], [0, 1], 'k--', lw=lw)
@@ -103,7 +108,7 @@ def roc_acu_calculator(DF, feature_name, log_save):
     # roc curve
     lw = 2
     plt.plot(fpr, tpr, color='darkorange',
-             lw=lw, label='ROC curve (area = %0.2f)' % roc_auc)
+             lw=lw, label='ROC curve (area = %0.4f)' % roc_auc)
     plt.plot([0, 1], [0, 1], color='navy', lw=lw, linestyle='--')
     plt.xlabel('False Positive Rate (FPR)')
     plt.ylabel('True Positive Rate (TPR)')
@@ -113,8 +118,12 @@ def roc_acu_calculator(DF, feature_name, log_save):
     plt.clf()
     
     return roc_auc
-  
-def feature_selection_svm_rfecv(X,Y):
+def feature_selection_svm_rfecv(X, Y, over_sampling):
+  # SMOTE oversampling for minority
+  if over_sampling:
+    sm = SMOTE("minority",random_state=331)
+    X, y = sm.fit_resample(X,y)  
+
   # model conf.
   k_fold = StratifiedKFold(n_splits=5, shuffle=True, random_state=331)
   svc = SVC(kernel = 'linear', probability = True)
@@ -140,9 +149,14 @@ def feature_selection_svm_rfecv(X,Y):
   return CV_rfc.best_estimator_.support_
   
   
-def feature_selection_LASSO(X, y):
+def feature_selection_LASSO(X, y, over_sampling=None):
     num_class = set(y)
-
+    
+    # SMOTE oversampling for minority
+    if over_sampling:
+      sm = SMOTE("minority",random_state=331)
+      X, y = sm.fit_resample(X,y)
+    
     if len(num_class) > 2:
         y = label_binarize(y, classes=list(num_class))
 

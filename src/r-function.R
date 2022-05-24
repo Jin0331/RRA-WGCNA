@@ -773,7 +773,7 @@ key_hub_intersection_plot <- function(total_keyhub, save_path){
 
 
 # Machine learning function ====
-gene_selection <- function(pr_name, total_keyhub_list, time_stamp){
+gene_selection <- function(pr_name, total_keyhub_list, time_stamp, over_sampling){
   
   log_save <- paste("ML_LOG", pr_name, time_stamp, sep = "/")
   dir.create(log_save, recursive = T, showWarnings = FALSE)
@@ -797,7 +797,7 @@ gene_selection <- function(pr_name, total_keyhub_list, time_stamp){
     x_df <- DF %>% select_at(all_of(total_keyhub_list[[Y_col_name]]))
     
     # gene selection
-    lasso_coef <- feature_selection_LASSO(x_df, y_df)
+    lasso_coef <- feature_selection_LASSO(x_df, y_df, over_sampling)
     lasso_selection_gene <- x_df %>% select(which(abs(lasso_coef) > 0)) %>% colnames()
     
     gene_selection_list[[trait_name]] <- lasso_selection_gene
@@ -810,7 +810,7 @@ gene_selection <- function(pr_name, total_keyhub_list, time_stamp){
   return(gene_selection_list)
   
 }
-ml_validation <- function(pr_name, selected_gene, time_stamp){
+ml_validation <- function(pr_name, selected_gene, time_stamp, over_sampling){
   
   log_save <- paste("ML_LOG", pr_name, time_stamp, sep = "/")
   dir.create(log_save, recursive = T, showWarnings = FALSE)
@@ -828,7 +828,7 @@ ml_validation <- function(pr_name, selected_gene, time_stamp){
                  by = "sample") %>% 
       column_to_rownames(var = "sample")
     # gene selection
-    roc_auc_list[[trait_name]] <- roc_acu_calculator(DF, Y_col_name, log_save)
+    roc_auc_list[[trait_name]] <- roc_acu_calculator(DF, Y_col_name, log_save, over_sampling = over_sampling)
   }
   
   return(roc_auc_list)

@@ -9,8 +9,8 @@ geneExpression <- key_hub_gene$network$deg
 
 # gene selection
 selected_gene <- gene_selection(total_keyhub_list = total_keyhub_list, pr_name = pr_name, time_stamp = time_stamp)
-selected_gene_validation <- ml_validation(selected_gene = selected_gene, pr_name = pr_name, time_stamp = time_stamp)
-final_candidatte_gene <- auc_cutoff(sg_list = selected_gene_validation, auc_cutoff = 0.7)
+final_candidatte_gene <- ml_validation(selected_gene = selected_gene, pr_name = pr_name, time_stamp = time_stamp) %>% 
+  auc_cutoff(sg_list = ., auc_cutoff = 0.7)
 
 
 

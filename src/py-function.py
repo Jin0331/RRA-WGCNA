@@ -19,6 +19,7 @@ import matplotlib.pyplot as plt
 from scipy import interp
 from imblearn.over_sampling import SMOTE
 
+# roc curve
 def roc_acu_calculator(DF, feature_name, log_save, over_sampling):
   X = DF.iloc[:, 1:]
   y = DF.iloc[:, 0]
@@ -118,6 +119,88 @@ def roc_acu_calculator(DF, feature_name, log_save, over_sampling):
     plt.clf()
     
     return roc_auc
+  
+def roc_acu_calculator_cv(DF, feature_name, log_save, over_sampling):
+    X = DF.iloc[:, 1:]
+    y = DF.iloc[:, 0]
+
+    # SMOTE oversampling for minority
+    if over_sampling:
+        sm = SMOTE(sampling_strategy="minority", random_state=331)
+        X, y = sm.fit_resample(X,y)
+
+    # multi-class detection
+    num_class = set(y)
+    if len(num_class) > 2:
+        y = label_binarize(y, classes=list(num_class))
+
+    fold_cnt = 5
+    kfold = KFold(n_splits=fold_cnt)
+    scores = []
+    pipe_line = make_pipeline(StandardScaler(),
+                             OneVsRestClassifier(SVC(kernel='linear', probability=True, random_state=331)))
+
+    roc_auc_fold = dict()
+    fpr_fold = dict()
+    tpr_fold = dict()
+
+    for k, (train, test) in enumerate(kfold.split(DF)):
+        y_score = pipe_line.fit(X.iloc[train, :], y[train]).decision_function(X.iloc[test, :])
+
+        if len(num_class) > 2:
+            fpr, tpr, roc_auc = roc_auc_function(y_test=y[test], y_score=y_score, num_class=num_class)
+            roc_auc_fold[k] = roc_auc['micro']
+            fpr_fold[k] = fpr['micro']
+            tpr_fold[k] = tpr['micro']
+
+        else :
+            fpr, tpr, thres = roc_curve(y[test], y_score, drop_intermediate=False)
+            roc_auc_fold[k] = roc_auc_score(y[test], y_score)
+            fpr_fold[k] = fpr
+            tpr_fold[k] = tpr
+
+
+    # First aggregate all false positive rates
+    all_fpr = np.unique(np.concatenate([fpr_fold[i] for i in range(len(num_class))]))
+
+    # Then interpolate all ROC curves at this points
+    mean_tpr = np.zeros_like(all_fpr)
+    for i in range(len(num_class)):
+        mean_tpr += interp(all_fpr, fpr_fold[i], tpr_fold[i])
+
+    # Finally average it and compute AUC
+    mean_tpr /= len(num_class)
+    fpr_fold["macro"] = all_fpr
+    tpr_fold["macro"] = mean_tpr
+    roc_auc_fold["macro"] = auc(fpr_fold["macro"], tpr_fold["macro"])
+
+    # Plot all ROC curves
+    lw = 2
+    plt.figure(figsize=(10,10))
+    plt.plot(fpr_fold["macro"], tpr_fold["macro"],
+             label='macro-average ROC curve (AUC = {0:0.3f})'
+                   ''.format(roc_auc_fold["macro"]),
+             color='red', linestyle=':', linewidth=4)
+
+    colors = cycle(['aqua', 'darkorange', 'darkgreen', 'violet', 'peru', 'gold'])
+    for i, color in zip(range(len(num_class)), colors):
+        plt.plot(fpr_fold[i], tpr_fold[i], color=color, lw=lw, alpha=0.2,
+                 label='ROC curve fold-{0} (AUC={1:0.3f})'
+                 ''.format(i + 1, roc_auc_fold[i]))
+
+    plt.plot([0, 1], [0, 1], 'k--', lw=lw)
+    # plt.xlim([0.0, 1.0])
+    # plt.ylim([0.0, 1.05])
+    plt.xlabel('False Positive Rate (FPR)')
+    plt.ylabel('True Positive Rate (TPR)')
+    plt.title(feature_name + "_Multi-class-CV")
+    plt.legend(loc="lower right")
+    plt.savefig(log_save + "/" + feature_name + '_ROC_AUC_CV.png')
+    plt.close()
+
+    return roc_auc_fold["macro"]
+  
+# gene selection
 def feature_selection_svm_rfecv(X, Y, over_sampling):
   # SMOTE oversampling for minority
   if over_sampling:
@@ -147,8 +230,7 @@ def feature_selection_svm_rfecv(X, Y, over_sampling):
   CV_rfc.fit(X, Y.values.ravel())
   
   return CV_rfc.best_estimator_.support_
-  
-  
+
 def feature_selection_LASSO(X, y, over_sampling=None):
     num_class = set(y)
     
@@ -193,7 +275,7 @@ def feature_selection_LASSO(X, y, over_sampling=None):
         print(search.best_params_)
         coefficients = search.best_estimator_.named_steps['model'].coef_
         return coefficients
-
+      
 def load_tcga_dataset(pkl_path, raw_path, cancer_type):   
   # subfunction
   def non_zero_column(DF):

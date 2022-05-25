@@ -1,15 +1,17 @@
 # Load module
 import numpy as np
+from numpy import interp
 import pandas as pd
 import os
 import datetime
 from itertools import cycle
 from requests import get
 from pathlib import Path
+
 from sklearn.preprocessing import StandardScaler, label_binarize
-from sklearn.pipeline import Pipeline
+from sklearn.pipeline import Pipeline, make_pipeline
 from sklearn.feature_selection import RFECV
-from sklearn.model_selection import train_test_split, GridSearchCV, RepeatedStratifiedKFold, StratifiedKFold, RandomizedSearchCV
+from sklearn.model_selection import train_test_split, GridSearchCV, RepeatedStratifiedKFold, StratifiedKFold, RandomizedSearchCV, KFold, cross_val_score
 from sklearn.linear_model import Lasso
 from sklearn.impute import KNNImputer
 from sklearn.svm import SVC,SVR
@@ -20,6 +22,33 @@ from scipy import interp
 from imblearn.over_sampling import SMOTE
 
 # roc curve
+def roc_auc_function(y_test, y_score, num_class):
+    fpr = dict()
+    tpr = dict()
+    roc_auc = dict()
+    for i in range(len(num_class)): 
+        fpr[i], tpr[i], _ = roc_curve(y_test[:, i], y_score[:, i]) 
+        roc_auc[i] = auc(fpr[i], tpr[i])
+
+    # Compute micro-average ROC curve and ROC area 
+    fpr["micro"], tpr["micro"], _ = roc_curve(y_test.ravel(), y_score.ravel()) 
+    roc_auc["micro"] = auc(fpr["micro"], tpr["micro"])
+
+    # First aggregate all false positive rates
+    all_fpr = np.unique(np.concatenate([fpr[i] for i in range(len(num_class))]))
+
+    # Then interpolate all ROC curves at this points
+    mean_tpr = np.zeros_like(all_fpr)
+    for i in range(len(num_class)):
+        mean_tpr += interp(all_fpr, fpr[i], tpr[i])
+    # Finally average it and compute AUC
+    mean_tpr /= len(num_class)
+    fpr["macro"] = all_fpr
+    tpr["macro"] = mean_tpr
+    roc_auc["macro"] = auc(fpr["macro"], tpr["macro"])
+
+    return fpr, tpr, roc_auc
+  
 def roc_acu_calculator(DF, feature_name, log_save, over_sampling):
   X = DF.iloc[:, 1:]
   y = DF.iloc[:, 0]

@@ -810,7 +810,7 @@ gene_selection <- function(pr_name, total_keyhub_list, time_stamp, over_sampling
   return(gene_selection_list)
   
 }
-ml_validation <- function(pr_name, selected_gene, time_stamp, over_sampling){
+ml_validation <- function(pr_name, selected_gene, time_stamp, over_sampling, cv){
   
   log_save <- paste("ML_LOG", pr_name, time_stamp, sep = "/")
   dir.create(log_save, recursive = T, showWarnings = FALSE)
@@ -828,7 +828,11 @@ ml_validation <- function(pr_name, selected_gene, time_stamp, over_sampling){
                  by = "sample") %>% 
       column_to_rownames(var = "sample")
     # gene selection
-    roc_auc_list[[trait_name]] <- roc_acu_calculator(DF, Y_col_name, log_save, over_sampling = over_sampling)
+    if(!cv){
+      roc_auc_list[[trait_name]] <- roc_acu_calculator(DF, Y_col_name, log_save, over_sampling = over_sampling)
+    } else {
+      roc_auc_list[[trait_name]] <- roc_acu_calculator_cv(DF, Y_col_name, log_save, over_sampling = over_sampling)
+    }
   }
   
   return(roc_auc_list)

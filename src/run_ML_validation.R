@@ -11,7 +11,7 @@ geneExpression <- key_hub_gene$network$deg
 selected_gene <- gene_selection(total_keyhub_list = total_keyhub_list, pr_name = pr_name, 
                                 time_stamp = time_stamp, over_sampling = TRUE)
 final_candidatte_gene <- ml_validation(selected_gene = selected_gene, pr_name = pr_name, time_stamp = time_stamp,
-                                       over_sampling=TRUE) %>% 
+                                       over_sampling=TRUE, cv = TRUE) %>% 
   auc_cutoff(sg_list = ., auc_cutoff = 0.7)
 
 

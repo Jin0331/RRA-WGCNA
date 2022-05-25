@@ -7,6 +7,7 @@
 RData/
 GSE/
 GDCdata/
+*.log
 *.txt
 *.csv
 *.sqlite*

@@ -46,29 +46,30 @@ pheno_check <- lapply(X = names(pheno), FUN = function(col_name){
   if(length(df_el) < 2 | length(df_el) > 5){
     return(NULL) 
   } else {
+    df_el <- c(length(df_el), df_el)
     df_el <- paste0(df_el, collapse = " / ")
     tibble(col_name = col_name, factor = df_el) %>% 
       return()
   }
 }) %>% compact() %>% bind_rows()
-
+print(pheno_check)
 
 
 # sample selection
-View(pheno)
+selected_pheno <- readline('enter phenotype : ')
 grp <- pheno %>% 
+  select(starts_with(selected_pheno)) %>% 
+  pull(1) %>% 
   # filter(str_detect(`source_name_ch1`, "HCC")) %>%
-  # pull(`characteristics_ch1`) %>%
-  # pull(`characteristics_ch1.1`) %>%
-  pull(`source_name_ch1`) %>%
   lapply(X = ., FUN = tolower) %>% 
   unlist() %>% 
   as.factor()
-
-grp %>% unique()
+print(grp %>% unique())
 design <- model.matrix(~0 + grp)
-head(grp)
-colnames(design) <- c("NT","TP") # 데이터에 맞추어 manual로 설정해야 됨
+
+nt_tp_order <- readline("enter NT-TP order : ") %>% 
+  str_split(pattern = " ") %>% unlist()
+colnames(design) <- nt_tp_order # 데이터에 맞추어 manual로 설정해야 됨
 
 # Limma
 multiple_limma[[gse_name]] <- run_limma(ge = geneExpression, de = design)

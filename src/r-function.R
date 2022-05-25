@@ -18,7 +18,6 @@ suppressMessages({
   source_python("src/py-function.py")
 })
 
-
 # function ----
 #' Function that returns numeric values with 2 decimal numbers.
 #' 

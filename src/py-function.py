@@ -1,4 +1,5 @@
 # Load module
+# module
 import numpy as np
 from numpy import interp
 import pandas as pd
@@ -7,7 +8,6 @@ import datetime
 from itertools import cycle
 from requests import get
 from pathlib import Path
-
 from sklearn.preprocessing import StandardScaler, label_binarize
 from sklearn.pipeline import Pipeline, make_pipeline
 from sklearn.feature_selection import RFECV
@@ -48,7 +48,6 @@ def roc_auc_function(y_test, y_score, num_class):
     roc_auc["macro"] = auc(fpr["macro"], tpr["macro"])
 
     return fpr, tpr, roc_auc
-  
 def roc_acu_calculator(DF, feature_name, log_save, over_sampling):
   X = DF.iloc[:, 1:]
   y = DF.iloc[:, 0]
@@ -148,7 +147,6 @@ def roc_acu_calculator(DF, feature_name, log_save, over_sampling):
     plt.clf()
     
     return roc_auc
-  
 def roc_acu_calculator_cv(DF, feature_name, log_save, over_sampling):
     X = DF.iloc[:, 1:]
     y = DF.iloc[:, 0]
@@ -259,7 +257,6 @@ def feature_selection_svm_rfecv(X, Y, over_sampling):
   CV_rfc.fit(X, Y.values.ravel())
   
   return CV_rfc.best_estimator_.support_
-
 def feature_selection_LASSO(X, y, over_sampling=None):
     num_class = set(y)
     
@@ -304,44 +301,40 @@ def feature_selection_LASSO(X, y, over_sampling=None):
         print(search.best_params_)
         coefficients = search.best_estimator_.named_steps['model'].coef_
         return coefficients
-      
+def non_zero_column(DF):
+  sample_cnt = int(len(DF.columns) * 0.2)
+  zero_row = dict(DF.isin([0]).sum(axis=1))
+  non_remove_feature = list()
+
+  for key, value in zero_row.items():
+      if value < sample_cnt:
+          non_remove_feature.append(key)
+  
+  return non_remove_feature
+def cancer_select(cols, cancer_type, raw_path):
+    # phenotype
+    phe1 = pd.read_csv(raw_path + "GDC-PANCAN.basic_phenotype.tsv", sep="\t")
+    phe1 = phe1.loc[phe1.program == "TCGA", :].loc[:, ['sample', 'sample_type', 'project_id']].drop_duplicates(['sample'])
+    phe1['sample'] =  phe1.apply(lambda x : x['sample'][:-1], axis=1)
+    phe2 = pd.read_csv(raw_path + "TCGA_phenotype_denseDataOnlyDownload.tsv", sep="\t")
+    ph_join = pd.merge(left = phe2 , right = phe1, how = "left", on = "sample").dropna(subset=['project_id'])
+    
+    if cancer_type == "PAN" or cancer_type == "PANCAN":
+        filterd = ph_join.loc[ph_join['sample_type_y'] == "Primary Tumor", :]
+        sample_barcode = filterd["sample"].tolist()
+    else:
+        filterd = ph_join.loc[((ph_join['sample_type_y'] == "Primary Tumor")|(ph_join['sample_type_y'] == "Solid Tissue Normal")) & (ph_join['project_id'] == "TCGA-" + cancer_type) , :]
+        sample_barcode = filterd["sample"].tolist()
+        
+    intersect_ = list(set(cols).intersection(sample_barcode))
+    
+    return intersect_
 def load_tcga_dataset(pkl_path, raw_path, cancer_type):   
   # subfunction
-  def non_zero_column(DF):
-    sample_cnt = int(len(DF.columns) * 0.2)
-    zero_row = dict(DF.isin([0]).sum(axis=1))
-    non_remove_feature = list()
-
-    for key, value in zero_row.items():
-        if value < sample_cnt:
-            non_remove_feature.append(key)
-    
-    return non_remove_feature
-  
-  def cancer_select(cols, cancer_type, raw_path):
-      # phenotype
-      phe1 = pd.read_csv(raw_path + "GDC-PANCAN.basic_phenotype.tsv", sep="\t")
-      phe1 = phe1.loc[phe1.program == "TCGA", :].loc[:, ['sample', 'sample_type', 'project_id']].drop_duplicates(['sample'])
-      phe1['sample'] =  phe1.apply(lambda x : x['sample'][:-1], axis=1)
-      phe2 = pd.read_csv(raw_path + "TCGA_phenotype_denseDataOnlyDownload.tsv", sep="\t")
-      ph_join = pd.merge(left = phe2 , right = phe1, how = "left", on = "sample").dropna(subset=['project_id'])
-      
-      if cancer_type == "PAN" or cancer_type == "PANCAN":
-          filterd = ph_join.loc[ph_join['sample_type_y'] == "Primary Tumor", :]
-          sample_barcode = filterd["sample"].tolist()
-      else:
-          filterd = ph_join.loc[((ph_join['sample_type_y'] == "Primary Tumor")|(ph_join['sample_type_y'] == "Solid Tissue Normal")) & (ph_join['project_id'] == "TCGA-" + cancer_type) , :]
-          sample_barcode = filterd["sample"].tolist()
-          
-      intersect_ = list(set(cols).intersection(sample_barcode))
-      
-      return intersect_
-
-# main
+  # main
   if os.path.isfile(pkl_path + cancer_type + "_rna.pkl"):
     # sep
     rna = pd.read_pickle(pkl_path  + cancer_type + "_rna.pkl")
-      
   else :
       # create dir
       Path(pkl_path).mkdir(parents=True, exist_ok=True)

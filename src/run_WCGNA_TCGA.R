@@ -1,16 +1,18 @@
 # function
 source("src/r-function.R")
 
-# LOCAL VARIABLE
-# rdata_path <- "RData/"
-# load(file = "RData/HCC_GEO_RobustDEGs_norm.RData")
-pr_name <- "LIHC"
-time_stamp <- Sys.time()
+# load RData
+if(!exists("robustdegs")){
+  load(paste0(base_dir, "/Step2_RRA_DEG.RData"))
+}
 
 # weighted gene co-expression network costruction
-# mch_test <- 0.13
-mch_test <- purrr::quietly(mergecutheight_test)(pr_name = "LIHC", robustdegs = robustdegs) %>% .$result$max_mch
-network <- network_preprocessing(pr_name = "LIHC", robustdegs = robustdegs, mch = mch_test,time_stamp = time_stamp)
+mch_test <- purrr::quietly(mergecutheight_test)(pr_name = "LIHC", robustdegs = robustdegs) 
+mch_test_value <- mch_test$result$max_mch
+
+network <- network_preprocessing(pr_name = pr_name, robustdegs = robustdegs, 
+                                 mch = mch_test_value,
+                                 time_stamp = time_stamp)
 
 # network variable
 moduleLabels <- network[[2]]$colors
@@ -21,7 +23,7 @@ MEs0 <- moduleEigengenes(network[[1]], moduleColors)$eigengenes
 MEs <- orderMEs(MEs0)
     
 # find key hub gene
-key_hub_gene <- find_key_modulegene(pr_name = "LIHC", network = network, 
-                                    MEs = MEs, time_stamp = time_stamp,
+key_hub_gene <- find_key_modulegene(base_dir = base_dir,
+                                    network = network, MEs = MEs, 
                                     mm = 0.85, gs = 0.2)
-
+save(key_hub_gene, file = paste0(base_dir, "/Step3_KEY_HUB_GENE.RData"))

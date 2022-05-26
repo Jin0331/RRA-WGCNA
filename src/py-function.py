@@ -18,7 +18,6 @@ from sklearn.svm import SVC,SVR
 from sklearn.multiclass import OneVsRestClassifier
 from sklearn.metrics import roc_auc_score, roc_curve, auc
 import matplotlib.pyplot as plt
-from scipy import interp
 from imblearn.over_sampling import SMOTE
 
 # roc curve
@@ -222,7 +221,7 @@ def roc_acu_calculator_cv(DF, feature_name, log_save, over_sampling):
     plt.ylabel('True Positive Rate (TPR)')
     plt.title(feature_name + "_Multi-class-CV")
     plt.legend(loc="lower right")
-    plt.savefig(log_save + "/" + feature_name + '_ROC_AUC_CV.png')
+    plt.savefig(log_save + "/Step4_" + feature_name + '_ROC_AUC_CV.png')
     plt.close()
 
     return roc_auc_fold["macro"]

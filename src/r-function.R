@@ -18,7 +18,36 @@ suppressMessages({
   source_python("src/py-function.py")
 })
 
+# global variable ----
+time_stamp <- Sys.time() %>% str_split(pattern = " ") %>% 
+  unlist() %>% .[1]
+pr_name <- readline('enter cancer type : ')
+# pr_name <- "LIHC"
+base_dir <- paste("WGCNA_RRA_RESULT", pr_name, time_stamp,sep = "/")
+dir.create(base_dir, showWarnings = FALSE, recursive = TRUE)
+
 # function ----
+retry <- function(expr, isError=function(x) "try-error" %in% class(x), maxErrors=5, sleep=0) {
+  attempts = 0
+  retval = try(eval(expr))
+  while (isError(retval)) {
+    attempts = attempts + 1
+    if (attempts >= maxErrors) {
+      msg = sprintf("retry: too many retries [[%s]]", capture.output(str(retval)))
+      flog.fatal(msg)
+      stop(msg)
+    } else {
+      msg = sprintf("retry: error in attempt %i/%i [[%s]]", attempts, maxErrors, 
+                    capture.output(str(retval)))
+      flog.error(msg)
+      warning(msg)
+    }
+    if (sleep > 0) Sys.sleep(sleep)
+    retval = try(eval(expr))
+  }
+  return(retval)
+}
+
 #' Function that returns numeric values with 2 decimal numbers.
 #' 
 #' @param x input numeric value with N decimal numbers.
@@ -90,6 +119,84 @@ biodbnet_db2db <- function(id){
 
 
 # GEO download function  ====
+GSE_manual <- function(){
+  multiple_limma <- list()
+  q <- 1
+  while(q != 0){
+    q <- readline('quit -> 0 : ')
+    if(q == 0) break
+    
+    gse_name <- readline('enter GSE assesion : ')
+    
+    # file load
+    if(file.exists(paste0("GSE/", gse_name, ".RData"))){
+      load(file = paste0("GSE/", gse_name, ".RData"))
+    } else {
+      dir.create("GSE/", showWarnings = FALSE, recursive = TRUE)
+      gse_data <- retry(expr = getGeneExpressionFromGEO(datasetGeoCode = gse_name, 
+                                                        retrieveGeneSymbols = TRUE, 
+                                                        verbose = TRUE),
+                        maxErrors = 10
+      )
+      save(gse_data, file = paste0("GSE/", gse_name, ".RData"))
+    }
+    
+    geneExpression <- gse_data$gene_expression
+    boxplot(geneExpression[1:10, 1:10])
+    
+    # run log2-transformation
+    log2_trans <- readline('Run log2-transformation? [y]/[n]  : ')
+    if(tolower(log2_trans) == "yes" | tolower(log2_trans) == "y"){
+      log2_trans <- TRUE
+    } else {
+      log2_trans <- FALSE
+    }
+    
+    if(log2_trans){
+      geneExpression <- log2(geneExpression)
+    }
+    
+    # phenotype selection
+    pheno <- gse_data$pheno@data %>% mutate_all(tolower)
+    pheno_check <- lapply(X = names(pheno), FUN = function(col_name){
+      df <- pheno[col_name]
+      df_el <- df %>% pull(1) %>% unique()
+      
+      if(length(df_el) < 2 | length(df_el) > 5){
+        return(NULL) 
+      } else {
+        df_el <- c(length(df_el), df_el)
+        df_el <- paste0(df_el, collapse = " / ")
+        tibble(col_name = col_name, factor = df_el) %>% 
+          return()
+      }
+    }) %>% compact() %>% bind_rows()
+    View(pheno_check)
+    
+    
+    # sample selection
+    selected_pheno <- readline('enter phenotype : ')
+    grp <- pheno %>% 
+      select(starts_with(selected_pheno)) %>% 
+      pull(1) %>% 
+      # filter(str_detect(`source_name_ch1`, "HCC")) %>%
+      lapply(X = ., FUN = tolower) %>% 
+      unlist() %>% 
+      as.factor()
+    # print(grp %>% unique())
+    design <- model.matrix(~0 + grp)
+    View(design)
+    
+    nt_tp_order <- readline("enter NT-TP order : ") %>% 
+      str_split(pattern = " ") %>% unlist()
+    colnames(design) <- nt_tp_order # 데이터에 맞추어 manual로 설정해야 됨
+    
+    # Limma
+    multiple_limma[[gse_name]] <- run_limma(ge = geneExpression, de = design)
+  }
+  return(multiple_limma)
+}
+
 #' Function that reads in a URL to check and verifies if it exists (function taken from https://stackoverflow.com/a/12195574 )
 #' 
 #' @param url the URL of a webpage
@@ -365,7 +472,7 @@ rra_extract <- function(ml, logfc = 0.0, fdr = 0.05){
   # # 1 - combine deg, 2 - up_down-regulated RRA
   list(combine_degs = combine_degs, updown_rra = updown_deg_rra) %>% return()
 }
-rra_analysis <- function(m_list, logfc = 0, fdr = 0.05, save_path =  "RData/GEO_RobustDEGs_norm.RData"){
+rra_analysis <- function(m_list, logfc = 0, fdr = 0.05, save_path = getwd()){
   rra_result <- rra_extract(ml = m_list, logfc = logfc, fdr = fdr)
   combine_degs_rra <- rra_result[[1]] %>% 
     dplyr::filter(GENE %in% rra_result[[2]]$Name) %>% 
@@ -379,7 +486,8 @@ rra_analysis <- function(m_list, logfc = 0, fdr = 0.05, save_path =  "RData/GEO_
   combine_degs_m <- up_down_rra_gene[,-1] %>% as.matrix()
   rownames(combine_degs_m) <- up_down_rra_gene$GENE
   colnames(combine_degs_m) <- colnames(up_down_rra_gene)[2:length(colnames(up_down_rra_gene))]
-  pheatmap(combine_degs_m, 
+  
+  p <- pheatmap(combine_degs_m, 
            display_numbers = TRUE,
            number_color = "black",
            fontsize_number = 10,
@@ -389,11 +497,22 @@ rra_analysis <- function(m_list, logfc = 0, fdr = 0.05, save_path =  "RData/GEO_
            cellwidth = 35,
            cellheight = 10
   )
+  save_pheatmap(p, filename = paste0(save_path, "/Step2_merge_DEA.png"))
+  
   # save
-  save(up_down_rra_gene, file = save_path)
+  save(up_down_rra_gene, file = paste0(save_path, "/Step2_merge_DEA.RData"))
   
   return(combine_degs_rra %>% 
            dplyr::pull(1))
+}
+
+save_pheatmap <- function(x, filename, width=480, height=960) {
+  stopifnot(!missing(x))
+  stopifnot(!missing(filename))
+  png(filename,width = width, height=height)
+  grid::grid.newpage()
+  grid::grid.draw(x$gtable)
+  dev.off()
 }
 
 # WGCNA function ==== 
@@ -512,13 +631,13 @@ network_preprocessing <- function(pr_name, robustdegs, mch = 0.25, time_stamp){
   
   return(list(deg = robustdeg_ge, network = net))
 }
-find_key_modulegene <- function(pr_name, network, MEs, select_clinical=NULL, mm=0.85, gs=0.25, time_stamp, binarytocategory=FALSE){
+find_key_modulegene <- function(base_dir, network, MEs, select_clinical=NULL, mm=0.85, gs=0.25, binarytocategory=FALSE){
   
   # variable
   expression_sample <- rownames(network[[1]])
   nGenes <- ncol(network[[1]])
   nSamples <- nrow(network[[1]])
-  log_save <- paste("WGCNA_LOG", pr_name, time_stamp, sep = "/")
+  log_save <- paste(base_dir, "WGCNA_LOG/", sep = "/")
   dir.create(log_save, recursive = T, showWarnings = FALSE)
   
   # UCSCXena clinical
@@ -706,7 +825,7 @@ module_cluster_plot <- function(network, save_path){
   mergedColors <- labels2colors(network[[2]]$colors)
   # Plot the dendrogram and the module colors underneath
   
-  png(paste0(save_path, "/module_cluster.png"), width = 1000, height = 1000)
+  png(paste0(save_path, "/Step3_module_cluster.png"), width = 1000, height = 1000)
   plotDendroAndColors(network[[2]]$dendrograms[[1]], mergedColors[network[[2]]$blockGenes[[1]]],
                       "Module colors",
                       dendroLabels = FALSE, hang = 0.03,
@@ -719,7 +838,7 @@ module_trait_plot <- function(moduleTraitCor, moduleTraitPvalue, data_trait, MEs
   textMatrix = paste(signif(moduleTraitCor, 2), "\n(",
                      signif(moduleTraitPvalue, 1), ")", sep = "");
   dim(textMatrix) = dim(moduleTraitCor)
-  png(paste0(save_path, "/module_trait.png"), width = 1000, height = 1000)
+  png(paste0(save_path, "/Step3_module_trait.png"), width = 1000, height = 1000)
   par(mar = c(6, 8.5, 3, 3));
   # Display the correlation values within a heatmap plot
   labeledHeatmap(Matrix = moduleTraitCor,
@@ -747,7 +866,7 @@ gene_module_size_plot <- function(gene_module_key_groph, save_path){
                          legend.title = "Module",
                          rotate = TRUE,
                          ggtheme = theme_minimal())
-  ggsave(p, filename = paste0(save_path, "/top3_modulesize.png"))
+  ggsave(p, filename = paste0(save_path, "/Step3_top3_modulesize.png"))
   return(p)
 }
 key_hub_intersection_plot <- function(total_keyhub, save_path){
@@ -756,7 +875,7 @@ key_hub_intersection_plot <- function(total_keyhub, save_path){
     scale_fill_gradient(low = "#F4FAFE", high = "#4981BF") +
     theme(legend.position = "none")
   
-  ggsave(p, filename = paste0(save_path, "/keyhubgene_intersection.png"), dpi = 200, width = 30, height = 10)
+  ggsave(p, filename = paste0(save_path, "/Step3_keyhubgene_intersection.png"), dpi = 200, width = 30, height = 10)
   return(p)
 }
 
@@ -772,9 +891,9 @@ key_hub_intersection_plot <- function(total_keyhub, save_path){
 
 
 # Machine learning function ====
-gene_selection <- function(pr_name, total_keyhub_list, time_stamp, over_sampling){
+gene_selection <- function(base_dir, total_keyhub_list, over_sampling){
   
-  log_save <- paste("ML_LOG", pr_name, time_stamp, sep = "/")
+  log_save <- paste(base_dir, "ML_LOG/", sep = "/")
   dir.create(log_save, recursive = T, showWarnings = FALSE)
   
   trait_names <- total_keyhub_list %>% names()
@@ -809,9 +928,9 @@ gene_selection <- function(pr_name, total_keyhub_list, time_stamp, over_sampling
   return(gene_selection_list)
   
 }
-ml_validation <- function(pr_name, selected_gene, time_stamp, over_sampling, cv){
+ml_validation <- function(base_dir, selected_gene, over_sampling, cv){
   
-  log_save <- paste("ML_LOG", pr_name, time_stamp, sep = "/")
+  log_save <- paste(base_dir, "ML_LOG/", sep = "/")
   dir.create(log_save, recursive = T, showWarnings = FALSE)
   trait_names <- selected_gene %>% names()
   
@@ -865,7 +984,7 @@ seleted_gene_intersection_plot <- function(gene_selection_list, save_path){
     scale_fill_gradient(low = "#F4FAFE", high = "#4981BF") +
     theme(legend.position = "none")
   
-  ggsave(p, filename = paste0(save_path, "/seleted_gene_intersection.png"), dpi = 200, width = 30, height = 10)
+  ggsave(p, filename = paste0(save_path, "/Step4_seleted_gene_intersection.png"), dpi = 200, width = 30, height = 10)
   return(p)
 }
 

@@ -18,12 +18,12 @@ selected_gene <- gene_selection(base_dir = base_dir,
                                 over_sampling = TRUE)
 save(robustdegs, file = paste0(base_dir, "/Step4_SELECTED_GENE.RData"))
 
-final_candidatte_gene <- ml_validation(base_dir = base_dir, selected_gene = selected_gene,
+final_candidate_gene <- ml_validation(base_dir = base_dir, selected_gene = selected_gene,
                                        over_sampling=TRUE, cv = TRUE) %>% 
   auc_cutoff(sg_list = ., auc_cutoff = 0.7)
 
 # final write
-final_candidatte_gene %>% 
+final_candidate_gene %>% 
   tibble(GENE_NAME = .) %>% 
   arrange(GENE_NAME) %>% 
   write_delim(file = paste0(base_dir, "/",pr_name, "_final_candidate.csv"), delim = ",")

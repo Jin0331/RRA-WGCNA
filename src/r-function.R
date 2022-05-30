@@ -145,7 +145,7 @@ GSE_manual <- function(){
     boxplot(geneExpression[1:10, 1:10])
     
     # run log2-transformation
-    log2_trans <- readline('Run log2-transformation? [y]/[n]  : ')
+    log2_trans <- readline('Run log2-transformation? [y]/[n] : ')
     if(tolower(log2_trans) == "yes" | tolower(log2_trans) == "y"){
       log2_trans <- TRUE
     } else {
@@ -173,9 +173,44 @@ GSE_manual <- function(){
     }) %>% compact() %>% bind_rows()
     View(pheno_check)
     
-    
     # sample selection
     selected_pheno <- readline('enter phenotype : ')
+    pheno[[selected_pheno]] <- str_replace_all(pheno[[selected_pheno]], pattern = " ", replacement = "_")
+    
+    # re pheno_check
+    pheno_check <- lapply(X = names(pheno), FUN = function(col_name){
+      df <- pheno[col_name]
+      df_el <- df %>% pull(1) %>% unique()
+      
+      if(length(df_el) < 2 | length(df_el) > 5){
+        return(NULL) 
+      } else {
+        df_el <- c(length(df_el), df_el)
+        df_el <- paste0(df_el, collapse = " / ")
+        tibble(col_name = col_name, factor = df_el) %>% 
+          return()
+      }
+    }) %>% compact() %>% bind_rows()
+    View(pheno_check)
+    
+    # phenotype re-level
+    relevel_check <- readline('Run re-level factor? [y] / [n] :')
+    if(tolower(relevel_check) == "yes" | tolower(relevel_check) == "y"){
+      relevel_check <- TRUE
+    } else {
+      relevel_check <- FALSE
+    }
+    
+    if(relevel_check){
+      NT_v <- readline("enter NT : ") %>% 
+        str_split(pattern = " ") %>% unlist()
+      TP_v <- readline("enter TP : ") %>% 
+        str_split(pattern = " ") %>% unlist()
+      
+      pheno[[selected_pheno]] <- forcats::fct_collapse(pheno[[selected_pheno]], NT = NT_v, TP = TP_v)
+    }
+    
+    # selected pheno
     grp <- pheno %>% 
       select(starts_with(selected_pheno)) %>% 
       pull(1) %>% 
@@ -295,7 +330,7 @@ getGeneExpressionFromGEO <- function(datasetGeoCode, retrieveGeneSymbols, verbos
   # check   URL
   checked_html_text <- "EMPTY_STRING"
   checked_html_text <- retry(expr =  xml2::read_html("https://ftp.ncbi.nlm.nih.gov/geo/series/"),
-                             maxErrors=10, 
+                             maxErrors=20, 
                              sleep=2)
   
   checked_html_text_url <- "EMPTY_STRING"
@@ -352,7 +387,7 @@ getGeneExpressionFromGEO <- function(datasetGeoCode, retrieveGeneSymbols, verbos
       platformsWithGeneSpaceSymbolField <- c("GPL80", "GPL8300", "GPL80", "GPL96", "GPL570", "GPL571", "GPL3921")
       
       # "gene_symbol"
-      platformsWithGene_SymbolField <- c("GPL20115")
+      platformsWithGene_SymbolField <- c("GPL20115", "GPL13667")
       
       # "HUGOname"
       platformsWithHUGOnamelField <- c("GPL5918")

@@ -4,7 +4,7 @@ source("src/r-function.R")
 # ======= RUN DEA & RRA ======= 
 # save
 multiple_limma <- GSE_manual()
-save(multiple_limma, file = paste0(base_dir, "/Step1_RAW.RData"))
+save(multiple_limma, file = paste0(base_dir, "/Step2_RAW.RData"))
 
 # rra & robust DEGs
 if(!exists("multiple_limma"))

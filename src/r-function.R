@@ -22,7 +22,6 @@ suppressMessages({
 time_stamp <- Sys.time() %>% str_split(pattern = " ") %>% 
   unlist() %>% .[1]
 pr_name <- readline('enter cancer type : ')
-# pr_name <- "LIHC"
 base_dir <- paste("WGCNA_RRA_RESULT", pr_name, time_stamp,sep = "/")
 dir.create(base_dir, showWarnings = FALSE, recursive = TRUE)
 
@@ -121,126 +120,136 @@ biodbnet_db2db <- function(id){
 # GEO download function  ====
 GSE_manual <- function(){
   multiple_limma <- list()
-  q <- 1
-  while(q != 0){
-    q <- readline('quit -> 0 : ')
-    if(q == 0) break
-    
-    gse_name <- readline('enter GSE assesion : ')
-    
-    # file load
-    if(file.exists(paste0("GSE/", gse_name, ".RData"))){
-      load(file = paste0("GSE/", gse_name, ".RData"))
-    } else {
-      dir.create("GSE/", showWarnings = FALSE, recursive = TRUE)
-      gse_data <- retry(expr = getGeneExpressionFromGEO(datasetGeoCode = gse_name, 
-                                                        retrieveGeneSymbols = TRUE, 
-                                                        verbose = TRUE),
-                        maxErrors = 10
-      )
-      save(gse_data, file = paste0("GSE/", gse_name, ".RData"))
-    }
-    
-    geneExpression <- gse_data$gene_expression
-    boxplot(geneExpression[1:10, 1:10])
-    
-    # run log2-transformation
-    log2_trans <- readline('Run log2-transformation? [y]/[n] : ')
-    if(tolower(log2_trans) == "yes" | tolower(log2_trans) == "y"){
-      log2_trans <- TRUE
-    } else {
-      log2_trans <- FALSE
-    }
-    
-    if(log2_trans){
-      geneExpression <- log2(geneExpression)
-      boxplot(geneExpression[1:10, 1:10])
-    }
-    
-    # phenotype selection
-    pheno <- gse_data$pheno@data %>% mutate_all(tolower)
-    pheno_check <- lapply(X = names(pheno), FUN = function(col_name){
-      df <- pheno[col_name]
-      df_el <- df %>% pull(1) %>% unique()
-      
-      if(length(df_el) < 2 | length(df_el) > 7){
-        return(NULL) 
-      } else {
-        df_el <- c(length(df_el), df_el)
-        df_el <- paste0(df_el, collapse = " / ")
-        tibble(col_name = col_name, factor = df_el) %>% 
-          return()
+  tryCatch(
+    expr = {
+      q <- 1
+      while(q != 0){
+        q <- readline('quit -> 0 : ')
+        if(q == 0) break
+        
+        gse_name <- readline('enter GSE assesion : ')
+        
+        # file load
+        if(file.exists(paste0("GSE/", gse_name, ".RData"))){
+          load(file = paste0("GSE/", gse_name, ".RData"))
+        } else {
+          dir.create("GSE/", showWarnings = FALSE, recursive = TRUE)
+          gse_data <- retry(expr = getGeneExpressionFromGEO(datasetGeoCode = gse_name, 
+                                                            retrieveGeneSymbols = TRUE, 
+                                                            verbose = TRUE),
+                            maxErrors = 10
+          )
+          save(gse_data, file = paste0("GSE/", gse_name, ".RData"))
+        }
+        
+        geneExpression <- gse_data$gene_expression
+        boxplot(geneExpression[1:10, 1:10])
+        
+        # run log2-transformation
+        log2_trans <- readline('Run log2-transformation? [y]/[n] : ')
+        if(tolower(log2_trans) == "yes" | tolower(log2_trans) == "y"){
+          log2_trans <- TRUE
+        } else {
+          log2_trans <- FALSE
+        }
+        
+        if(log2_trans){
+          geneExpression <- log2(geneExpression)
+          boxplot(geneExpression[1:10, 1:10])
+        }
+        
+        # phenotype selection
+        pheno <- gse_data$pheno@data %>% mutate_all(tolower)
+        pheno_check <- lapply(X = names(pheno), FUN = function(col_name){
+          df <- pheno[col_name]
+          df_el <- df %>% pull(1) %>% unique()
+          
+          if(length(df_el) < 2 | length(df_el) > 12){
+            return(NULL) 
+          } else {
+            df_el <- c(length(df_el), df_el)
+            df_el <- paste0(df_el, collapse = " / ")
+            tibble(col_name = col_name, factor = df_el) %>% 
+              return()
+          }
+        }) %>% compact() %>% bind_rows()
+        View(pheno_check)
+        
+        # sample selection
+        selected_pheno <- readline('enter phenotype : ')
+        pheno[[selected_pheno]] <- str_replace_all(pheno[[selected_pheno]], pattern = " ", replacement = "_")
+        
+        # re pheno_check
+        pheno_check <- lapply(X = names(pheno), FUN = function(col_name){
+          df <- pheno[col_name]
+          df_el <- df %>% pull(1) %>% unique()
+          
+          if(length(df_el) < 2 | length(df_el) > 12){
+            return(NULL) 
+          } else {
+            df_el <- c(length(df_el), df_el)
+            df_el <- paste0(df_el, collapse = " / ")
+            tibble(col_name = col_name, factor = df_el) %>% 
+              return()
+          }
+        }) %>% compact() %>% bind_rows()
+        
+        pheno_check %>% 
+          dplyr::filter(col_name == selected_pheno) %>% 
+          dplyr::pull(factor) %>% 
+          print()
+        
+        # phenotype re-level
+        relevel_check <- readline('Run re-level factor? [y]/[n] : ')
+        if(tolower(relevel_check) == "yes" | tolower(relevel_check) == "y"){
+          relevel_check <- TRUE
+        } else {
+          relevel_check <- FALSE
+        }
+        
+        if(relevel_check){
+          NT_v <- readline("enter NT : ") %>% 
+            str_split(pattern = " ") %>% unlist()
+          TP_v <- readline("enter TP : ") %>% 
+            str_split(pattern = " ") %>% unlist()
+          
+          pheno[[selected_pheno]] <- forcats::fct_collapse(pheno[[selected_pheno]], 
+                                                           NT = NT_v, TP = TP_v, other_level = 'NA') 
+          pheno <- pheno %>% dplyr::filter(!!as.symbol(selected_pheno) == "NT" | !!as.symbol(selected_pheno) == "TP")
+          pheno[[selected_pheno]] <- pheno[[selected_pheno]] %>% droplevels()
+          
+          pheno %>% group_by(!!as.symbol(selected_pheno)) %>% summarise(cnt = n()) %>% 
+            print()
+        }
+        
+        # selected pheno
+        grp <- pheno %>% 
+          select(starts_with(selected_pheno)) %>% 
+          pull(1) %>% 
+          # filter(str_detect(`source_name_ch1`, "HCC")) %>%
+          lapply(X = ., FUN = tolower) %>% 
+          unlist() %>% 
+          as.factor()
+        # print(grp %>% unique())
+        design <- model.matrix(~0 + grp)
+        View(design)
+        
+        nt_tp_order <- readline("enter NT-TP order : ") %>% 
+          str_split(pattern = " ") %>% unlist()
+        colnames(design) <- nt_tp_order # 데이터에 맞추어 manual로 설정해야 됨
+        
+        # Limma
+        
+        geneExpression_filter <- geneExpression[, pheno %>% rownames()] 
+        multiple_limma[[gse_name]] <- run_limma(ge = geneExpression_filter, de = design)
       }
-    }) %>% compact() %>% bind_rows()
-    View(pheno_check)
-    
-    # sample selection
-    selected_pheno <- readline('enter phenotype : ')
-    pheno[[selected_pheno]] <- str_replace_all(pheno[[selected_pheno]], pattern = " ", replacement = "_")
-    
-    # re pheno_check
-    pheno_check <- lapply(X = names(pheno), FUN = function(col_name){
-      df <- pheno[col_name]
-      df_el <- df %>% pull(1) %>% unique()
-      
-      if(length(df_el) < 2 | length(df_el) > 7){
-        return(NULL) 
-      } else {
-        df_el <- c(length(df_el), df_el)
-        df_el <- paste0(df_el, collapse = " / ")
-        tibble(col_name = col_name, factor = df_el) %>% 
-          return()
-      }
-    }) %>% compact() %>% bind_rows()
-    
-    pheno_check %>% 
-      dplyr::filter(col_name == selected_pheno) %>% 
-      dplyr::pull(factor) %>% 
-      print()
-    
-    # phenotype re-level
-    relevel_check <- readline('Run re-level factor? [y] / [n] : ')
-    if(tolower(relevel_check) == "yes" | tolower(relevel_check) == "y"){
-      relevel_check <- TRUE
-    } else {
-      relevel_check <- FALSE
+    },
+    error = function(e) {
+      return(multiple_limma)
     }
-    
-    if(relevel_check){
-      NT_v <- readline("enter NT : ") %>% 
-        str_split(pattern = " ") %>% unlist()
-      TP_v <- readline("enter TP : ") %>% 
-        str_split(pattern = " ") %>% unlist()
-      
-      pheno[[selected_pheno]] <- forcats::fct_collapse(pheno[[selected_pheno]], 
-                                                       NT = NT_v, TP = TP_v, other_level = 'NA') 
-      pheno <- pheno %>% dplyr::filter(!!as.symbol(selected_pheno) == "NT" | !!as.symbol(selected_pheno) == "TP")
-      pheno[[selected_pheno]] <- pheno[[selected_pheno]] %>% droplevels()
-      
-      pheno %>% group_by(!!as.symbol(selected_pheno)) %>% summarise(cnt = n())
-    }
-    
-    # selected pheno
-    grp <- pheno %>% 
-      select(starts_with(selected_pheno)) %>% 
-      pull(1) %>% 
-      # filter(str_detect(`source_name_ch1`, "HCC")) %>%
-      lapply(X = ., FUN = tolower) %>% 
-      unlist() %>% 
-      as.factor()
-    # print(grp %>% unique())
-    design <- model.matrix(~0 + grp)
-    View(design)
-    
-    nt_tp_order <- readline("enter NT-TP order : ") %>% 
-      str_split(pattern = " ") %>% unlist()
-    colnames(design) <- nt_tp_order # 데이터에 맞추어 manual로 설정해야 됨
-    
-    # Limma
-    
-    geneExpression_filter <- geneExpression[, pheno %>% rownames()] 
-    multiple_limma[[gse_name]] <- run_limma(ge = geneExpression_filter, de = design)
-  }
+  )
+
+
   return(multiple_limma)
 }
 
@@ -405,7 +414,7 @@ getGeneExpressionFromGEO <- function(datasetGeoCode, retrieveGeneSymbols, verbos
       platformsWithHUGOnamelField <- c("GPL5918")
       
       # "symbol"
-      platformsWithSymbolField <- c("GPL1293", "GPL6102", "GPL6104", "GPL6883", "GPL6884", "GPL10558")
+      platformsWithSymbolField <- c("GPL1293", "GPL6102", "GPL6104", "GPL6883", "GPL6884", "GPL10558","GPL6947")
       
       # "GENE_SYMBOL
       platformsWith_GENE_SYMBOL_Field <- c("GPL13497", "GPL14550", "GPL17077", "GPL6480")
@@ -568,10 +577,11 @@ mergecutheight_test <- function(pr_name, robustdegs){
   max_module_cnt <- 0
   max_module <- NULL
   
-  for(mch_value in seq(from = 0.1, to = 0.4, by = 0.02)){
+  for(mch_value in seq(from = 0.1, to = 0.3, by = 0.01)){
     print(paste0("mch_value : ", mch_value))
-    network <- network_preprocessing(pr_name = "LIHC", robustdegs = robustdegs, mch = mch_value, time_stamp = "test")
+    network <- network_preprocessing(pr_name = pr_name, robustdegs = robustdegs, mch = mch_value, time_stamp = "test")
     module_cnt <- length(network[[2]]$colors %>% unique()) - 1
+    print(module_cnt)
     
     if(max_module_cnt <= module_cnt){
       max_module <- mch_value
@@ -663,7 +673,7 @@ network_preprocessing <- function(pr_name, robustdegs, mch = 0.25, time_stamp){
                             power = sft,
                             corType = "pearson",
                             TOMType = "unsigned", 
-                            minModuleSize = 50,
+                            minModuleSize = 30,
                             # maxBlockSize = 500,
                             reassignThreshold = 0, 
                             mergeCutHeight = mch,
@@ -678,7 +688,7 @@ network_preprocessing <- function(pr_name, robustdegs, mch = 0.25, time_stamp){
   
   return(list(deg = robustdeg_ge, network = net))
 }
-find_key_modulegene <- function(base_dir, network, MEs, select_clinical=NULL, mm=0.85, gs=0.25, binarytocategory=FALSE){
+find_key_modulegene <- function(pr_name, base_dir, network, MEs, select_clinical=NULL, mm=0.85, gs=0.25, binarytocategory=FALSE){
   
   # variable
   expression_sample <- rownames(network[[1]])
@@ -688,9 +698,9 @@ find_key_modulegene <- function(base_dir, network, MEs, select_clinical=NULL, mm
   dir.create(log_save, recursive = T, showWarnings = FALSE)
   
   # UCSCXena clinical
-  clinical_trait <- read_delim("https://tcga-xena-hub.s3.us-east-1.amazonaws.com/download/TCGA.LIHC.sampleMap%2FLIHC_clinicalMatrix",
+  clinical_trait <- read_delim(paste0("https://tcga-xena-hub.s3.us-east-1.amazonaws.com/download/TCGA.",pr_name,".sampleMap%2F",pr_name,"_clinicalMatrix"),
                                delim = "\t", show_col_types = FALSE, progress = FALSE)
-  survival_trait <- read_delim("https://tcga-xena-hub.s3.us-east-1.amazonaws.com/download/survival%2FLIHC_survival.txt",
+  survival_trait <- read_delim(paste0("https://tcga-xena-hub.s3.us-east-1.amazonaws.com/download/survival%2F",pr_name,"_survival.txt"),
                                delim = "\t", show_col_types = FALSE, progress = FALSE) %>% 
     dplyr::select(sample, OS, OS.time, DSS, DSS.time, DFI, DFI.time, PFI, PFI.time)
   
@@ -705,8 +715,7 @@ find_key_modulegene <- function(base_dir, network, MEs, select_clinical=NULL, mm
     left_join(x = ., y = immune_trait, by = c("sampleID" = "sample")) %>% 
     left_join(x = ., y = molecular_trait, by = "sampleID")
   
-  default_clinical <- c('sample_type', 'pathologic_stage', 'Subtype_Immune_Model_Based',
-                        'Subtype_Integrative')
+  default_clinical <- c('sample_type', 'Subtype_Immune_Model_Based', 'Subtype_Integrative')
   use_clinical <- c(default_clinical, select_clinical)
   
   # clinical trait preprocessing
@@ -715,7 +724,7 @@ find_key_modulegene <- function(base_dir, network, MEs, select_clinical=NULL, mm
     column_to_rownames(var = "sampleID") %>% 
     dplyr::select(all_of(use_clinical)) %>% 
     mutate(sample_type = ifelse(sample_type == "Primary Tumor", 1, 0),
-           pathologic_stage = str_remove_all(string = pathologic_stage, pattern = "A|B|C"),
+           # pathologic_stage = str_remove_all(string = pathologic_stage, pattern = "A|B|C"),
            # pathologic_T = str_remove_all(string = pathologic_T, pattern = "a|b")
            ) %>%  # sample type 한정, pathogenic stage
     replace(is.na(.), 0) %>% 
@@ -760,7 +769,8 @@ find_key_modulegene <- function(base_dir, network, MEs, select_clinical=NULL, mm
   }) %>% 
     bind_rows() %>% arrange(desc(signTrait)) %>% 
     dplyr::pull(1) %>% 
-    .[1:3]
+    .[1:3] %>% 
+    .[!is.na(.)]
   
   gene_module_key <- network[[2]]$colors %>% names() %>% tibble(gene = .) %>% 
     bind_cols(., tibble(module = moduleColors)) %>% 

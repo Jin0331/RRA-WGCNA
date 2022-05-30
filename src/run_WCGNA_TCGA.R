@@ -7,7 +7,7 @@ if(!exists("robustdegs")){
 }
 
 # weighted gene co-expression network costruction
-mch_test <- purrr::quietly(mergecutheight_test)(pr_name = "LIHC", robustdegs = robustdegs) 
+mch_test <- purrr::quietly(mergecutheight_test)(pr_name = pr_name, robustdegs = robustdegs) 
 mch_test_value <- mch_test$result$max_mch
 
 network <- network_preprocessing(pr_name = pr_name, robustdegs = robustdegs, 
@@ -23,7 +23,7 @@ MEs0 <- moduleEigengenes(network[[1]], moduleColors)$eigengenes
 MEs <- orderMEs(MEs0)
     
 # find key hub gene
-key_hub_gene <- find_key_modulegene(base_dir = base_dir,
+key_hub_gene <- find_key_modulegene(pr_name = pr_name, base_dir = base_dir,
                                     network = network, MEs = MEs, 
                                     mm = 0.85, gs = 0.2)
 save(key_hub_gene, file = paste0(base_dir, "/Step3_KEY_HUB_GENE.RData"))

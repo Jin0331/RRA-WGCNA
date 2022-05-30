@@ -191,11 +191,13 @@ def roc_acu_calculator_cv(DF, feature_name, log_save, over_sampling):
 
     # Then interpolate all ROC curves at this points
     mean_tpr = np.zeros_like(all_fpr)
-    for i in range(len(num_class)):
+    # for i in range(len(num_class)):
+    for i in range(fold_cnt):
         mean_tpr += interp(all_fpr, fpr_fold[i], tpr_fold[i])
 
     # Finally average it and compute AUC
-    mean_tpr /= len(num_class)
+    # mean_tpr /= len(num_class)
+    mean_tpr /= fold_cnt
     fpr_fold["macro"] = all_fpr
     tpr_fold["macro"] = mean_tpr
     roc_auc_fold["macro"] = auc(fpr_fold["macro"], tpr_fold["macro"])
@@ -209,7 +211,7 @@ def roc_acu_calculator_cv(DF, feature_name, log_save, over_sampling):
              color='red', linestyle=':', linewidth=4)
 
     colors = cycle(['aqua', 'darkorange', 'darkgreen', 'violet', 'peru', 'gold'])
-    for i, color in zip(range(len(num_class)), colors):
+    for i, color in zip(range(fold_cnt), colors):
         plt.plot(fpr_fold[i], tpr_fold[i], color=color, lw=lw, alpha=0.2,
                  label='ROC curve fold-{0} (AUC={1:0.3f})'
                  ''.format(i + 1, roc_auc_fold[i]))

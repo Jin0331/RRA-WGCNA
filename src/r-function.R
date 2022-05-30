@@ -154,6 +154,7 @@ GSE_manual <- function(){
     
     if(log2_trans){
       geneExpression <- log2(geneExpression)
+      boxplot(geneExpression[1:10, 1:10])
     }
     
     # phenotype selection
@@ -162,7 +163,7 @@ GSE_manual <- function(){
       df <- pheno[col_name]
       df_el <- df %>% pull(1) %>% unique()
       
-      if(length(df_el) < 2 | length(df_el) > 5){
+      if(length(df_el) < 2 | length(df_el) > 7){
         return(NULL) 
       } else {
         df_el <- c(length(df_el), df_el)
@@ -182,7 +183,7 @@ GSE_manual <- function(){
       df <- pheno[col_name]
       df_el <- df %>% pull(1) %>% unique()
       
-      if(length(df_el) < 2 | length(df_el) > 5){
+      if(length(df_el) < 2 | length(df_el) > 7){
         return(NULL) 
       } else {
         df_el <- c(length(df_el), df_el)
@@ -191,10 +192,14 @@ GSE_manual <- function(){
           return()
       }
     }) %>% compact() %>% bind_rows()
-    View(pheno_check)
+    
+    pheno_check %>% 
+      dplyr::filter(col_name == selected_pheno) %>% 
+      dplyr::pull(factor) %>% 
+      print()
     
     # phenotype re-level
-    relevel_check <- readline('Run re-level factor? [y] / [n] :')
+    relevel_check <- readline('Run re-level factor? [y] / [n] : ')
     if(tolower(relevel_check) == "yes" | tolower(relevel_check) == "y"){
       relevel_check <- TRUE
     } else {
@@ -207,7 +212,12 @@ GSE_manual <- function(){
       TP_v <- readline("enter TP : ") %>% 
         str_split(pattern = " ") %>% unlist()
       
-      pheno[[selected_pheno]] <- forcats::fct_collapse(pheno[[selected_pheno]], NT = NT_v, TP = TP_v)
+      pheno[[selected_pheno]] <- forcats::fct_collapse(pheno[[selected_pheno]], 
+                                                       NT = NT_v, TP = TP_v, other_level = 'NA') 
+      pheno <- pheno %>% dplyr::filter(!!as.symbol(selected_pheno) == "NT" | !!as.symbol(selected_pheno) == "TP")
+      pheno[[selected_pheno]] <- pheno[[selected_pheno]] %>% droplevels()
+      
+      pheno %>% group_by(!!as.symbol(selected_pheno)) %>% summarise(cnt = n())
     }
     
     # selected pheno
@@ -227,7 +237,9 @@ GSE_manual <- function(){
     colnames(design) <- nt_tp_order # 데이터에 맞추어 manual로 설정해야 됨
     
     # Limma
-    multiple_limma[[gse_name]] <- run_limma(ge = geneExpression, de = design)
+    
+    geneExpression_filter <- geneExpression[, pheno %>% rownames()] 
+    multiple_limma[[gse_name]] <- run_limma(ge = geneExpression_filter, de = design)
   }
   return(multiple_limma)
 }

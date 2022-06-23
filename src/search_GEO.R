@@ -49,13 +49,10 @@ rs_sample <- inner_join(rs, sample_count, by = "gse") %>%
 # 2nd filter -> gpl count
 rs_gpl <- inner_join(rs_sample, gpl_count, by = "gse") %>% 
   filter(gpl_count <= 4) %>% 
+  # filter(!is.na(pubmed_id)) %>% 
   arrange(gpl_count)
 
-
-gse_id <- rs_gpl %>% dplyr::pull(gse)
-tbl(con, "gse_gpl") %>% 
-  collect() %>% 
-  filter(gse %in% gse_id) %>% 
-  dcast(gse ~ gpl) %>% 
-  View()
-  
+# Write with add GEO LINKS
+rs_gpl %>% 
+  mutate(GEO_LINK = paste0("https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=", gse)) %>% 
+  write_delim("GEO_2nd_filtered_HCC.csv", delim = ",")

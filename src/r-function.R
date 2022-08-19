@@ -160,10 +160,12 @@ GSE_manual <- function(pheno_edit = TRUE){
         }
         
         # phenotype selection
-        pheno <- gse_data$pheno@data %>% mutate_all(tolower)
-        
-        if(pheno_edit)
-          pheno <- data_edit(pheno)
+        if(file.exists(paste0("GSE/", gse_name, "_pheno.txt"))){
+          pheno <- read.delim(file = paste0("GSE/", gse_name, "_pheno.txt"), sep = "\t")
+        } else {
+          pheno <- gse_data$pheno@data %>% mutate_all(tolower)  
+          write.table(pheno, file = paste0("GSE/", gse_name, "_pheno.txt"), sep = "\t", row.names = TRUE)
+        }
         
         pheno_check <- lapply(X = names(pheno), FUN = function(col_name){
           df <- pheno[col_name]
@@ -252,6 +254,7 @@ GSE_manual <- function(pheno_edit = TRUE){
       }
     },
     error = function(e) {
+      print(e)
       return(multiple_limma)
     }
   )

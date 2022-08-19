@@ -13,6 +13,7 @@ suppressMessages({
   library(WGCNA)
   library(CorLevelPlot)
   library(caret)
+  library(DataEditR)
   
   use_condaenv(condaenv = "geo-py")
   source_python("src/py-function.py")
@@ -118,7 +119,7 @@ biodbnet_db2db <- function(id){
 
 
 # GEO download function  ====
-GSE_manual <- function(){
+GSE_manual <- function(pheno_edit = TRUE){
   multiple_limma <- list()
   tryCatch(
     expr = {
@@ -160,6 +161,10 @@ GSE_manual <- function(){
         
         # phenotype selection
         pheno <- gse_data$pheno@data %>% mutate_all(tolower)
+        
+        if(pheno_edit)
+          pheno <- data_edit(pheno)
+        
         pheno_check <- lapply(X = names(pheno), FUN = function(col_name){
           df <- pheno[col_name]
           df_el <- df %>% pull(1) %>% unique()
@@ -174,6 +179,8 @@ GSE_manual <- function(){
           }
         }) %>% compact() %>% bind_rows()
         View(pheno_check)
+        
+
         
         # sample selection
         selected_pheno <- readline('enter phenotype : ')
@@ -400,6 +407,8 @@ getGeneExpressionFromGEO <- function(datasetGeoCode, retrieveGeneSymbols, verbos
         print("sort(names(platform_ann_df))")
         print(sort(names(platform_ann_df)))
       }
+      # "GENE"
+      platformsWithGENEField <- c("GPL1528")
       
       # "gene_assignment
       platformsWithGene_assignmentField <- c("GPL11532", "GPL23126", "GPL6244", "GPL17586", "GPL5175")
@@ -420,14 +429,16 @@ getGeneExpressionFromGEO <- function(datasetGeoCode, retrieveGeneSymbols, verbos
       platformsWith_GENE_SYMBOL_Field <- c("GPL13497", "GPL14550", "GPL17077", "GPL6480")
       
       # if symbol
-      if(thisGEOplatform %in% c(platformsWithHUGOnamelField, platformsWithGene_assignmentField, platformsWithGeneSpaceSymbolField, platformsWithGene_SymbolField, platformsWithSymbolField, platformsWith_GENE_SYMBOL_Field)   ) {
+      if(thisGEOplatform %in% c(platformsWithGENEField, platformsWithHUGOnamelField, platformsWithGene_assignmentField, platformsWithGeneSpaceSymbolField, platformsWithGene_SymbolField, platformsWithSymbolField, platformsWith_GENE_SYMBOL_Field)   ) {
         
         emptyGeneSymbol <- ""
         FIRST_GENE_EXPRESSION_INDEX <- 2
         
         if (verbose == TRUE)    
           cat("\n[start] loop for the association of the gene symbols to the probeset ID's\n", sep="")
-        
+
+        if(thisGEOplatform %in% platformsWithGENEField)
+          thisSymbol <- symbol_mapping(ge = gene_expression, col_name = "GENE", platform_ann_df = platform_ann_df)
         if(thisGEOplatform %in% platformsWithGeneSpaceSymbolField)
           thisSymbol <- symbol_mapping(ge = gene_expression, col_name = "Gene Symbol", platform_ann_df = platform_ann_df)
         if(thisGEOplatform %in% platformsWithGene_SymbolField)

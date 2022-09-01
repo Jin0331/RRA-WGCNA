@@ -120,8 +120,8 @@ biodbnet_db2db <- function(id){
 
 # GEO download function  ====
 GSE_manual <- function(pheno_edit = TRUE){
-  now_date <- Sys.time() %>% str_split(pattern = " ") %>% unlist() %>% .[1]
-  dir.create(paste0("tmp/", now_date), recursive = TRUE, showWarnings = FALSE)
+  # now_date <- Sys.time() %>% str_split(pattern = " ") %>% unlist() %>% .[1]
+  dir.create(paste0(base_dir, "/DEA"), recursive = TRUE, showWarnings = FALSE)
   multiple_limma <- list()
   tryCatch(
     expr = {
@@ -132,8 +132,8 @@ GSE_manual <- function(pheno_edit = TRUE){
         
         gse_name <- readline('enter GSE assesion : ')
         
-        if(file.exists(paste0("tmp/", now_date, "/", gse_name, "_limma.txt"))){
-          multiple_limma[[gse_name]] <- read_delim(paste0("tmp/", now_date, "/", gse_name, "_limma.txt"), delim = "\t",
+        if(file.exists(paste0(base_dir, "/DEA/", gse_name, "_limma.txt"))){
+          multiple_limma[[gse_name]] <- read_delim(paste0(base_dir, "/DEA/", gse_name, "_limma.txt"), delim = "\t",
                                                    show_col_types = FALSE)
           next
         } else {
@@ -258,7 +258,7 @@ GSE_manual <- function(pheno_edit = TRUE){
           
           geneExpression_filter <- geneExpression[, pheno %>% rownames()] # rowname
           limma_result <- run_limma(ge = geneExpression_filter, de = design)
-          write_delim(x = limma_result, path = paste0(base_dir, "/", now_date, "/", gse_name, "_limma.txt"), delim = "\t")
+          write_delim(x = limma_result, path = paste0(base_dir, "/DEA/", gse_name, "_limma.txt"), delim = "\t")
           multiple_limma[[gse_name]] <- limma_result
         }
       }

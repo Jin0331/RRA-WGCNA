@@ -120,6 +120,8 @@ biodbnet_db2db <- function(id){
 
 # GEO download function  ====
 GSE_manual <- function(pheno_edit = TRUE){
+  now_date <- Sys.time() %>% str_split(pattern = " ") %>% unlist() %>% .[1]
+  dir.create(paste0("tmp/", now_date), recursive = TRUE, showWarnings = FALSE)
   multiple_limma <- list()
   tryCatch(
     expr = {
@@ -130,127 +132,135 @@ GSE_manual <- function(pheno_edit = TRUE){
         
         gse_name <- readline('enter GSE assesion : ')
         
-        # file load
-        if(file.exists(paste0("GSE/", gse_name, ".RData"))){
-          load(file = paste0("GSE/", gse_name, ".RData"))
+        if(file.exists(paste0("tmp/", now_date, "/", gse_name, "_limma.txt"))){
+          multiple_limma[[gse_name]] <- read_delim(paste0("tmp/", now_date, "/", gse_name, "_limma.txt"), delim = "\t",
+                                                   show_col_types = FALSE)
+          next
         } else {
-          dir.create("GSE/", showWarnings = FALSE, recursive = TRUE)
-          gse_data <- retry(expr = getGeneExpressionFromGEO(datasetGeoCode = gse_name, 
-                                                            retrieveGeneSymbols = TRUE, 
-                                                            verbose = TRUE),
-                            maxErrors = 10
-          )
-          save(gse_data, file = paste0("GSE/", gse_name, ".RData"))
-        }
-        
-        geneExpression <- gse_data$gene_expression
-        boxplot(geneExpression[1:10, 1:10])
-        
-        # run log2-transformation
-        log2_trans <- readline('Run log2-transformation? [y]/[n] : ')
-        if(tolower(log2_trans) == "yes" | tolower(log2_trans) == "y"){
-          log2_trans <- TRUE
-        } else {
-          log2_trans <- FALSE
-        }
-        
-        if(log2_trans){
-          geneExpression <- log2(geneExpression)
+          # file load
+          if(file.exists(paste0("GSE/", gse_name, ".RData"))){
+            load(file = paste0("GSE/", gse_name, ".RData"))
+          } else {
+            dir.create("GSE/", showWarnings = FALSE, recursive = TRUE)
+            gse_data <- retry(expr = getGeneExpressionFromGEO(datasetGeoCode = gse_name, 
+                                                              retrieveGeneSymbols = TRUE, 
+                                                              verbose = TRUE),
+                              maxErrors = 20
+            )
+            save(gse_data, file = paste0("GSE/", gse_name, ".RData"))
+          }
+          
+          geneExpression <- gse_data$gene_expression
           boxplot(geneExpression[1:10, 1:10])
-        }
-        
-        # phenotype selection
-        if(file.exists(paste0("GSE/", gse_name, "_pheno.txt"))){
-          pheno <- read.delim(file = paste0("GSE/", gse_name, "_pheno.txt"), sep = "\t")
-        } else {
-          pheno <- gse_data$pheno@data %>% mutate_all(tolower)  
-          write.table(pheno, file = paste0("GSE/", gse_name, "_pheno.txt"), sep = "\t", row.names = TRUE)
-        }
-        
-        pheno_check <- lapply(X = names(pheno), FUN = function(col_name){
-          df <- pheno[col_name]
-          df_el <- df %>% pull(1) %>% unique()
           
-          if(length(df_el) < 2 | length(df_el) > 12){
-            return(NULL) 
+          # run log2-transformation
+          log2_trans <- readline('Run log2-transformation? [y]/[n] : ')
+          if(tolower(log2_trans) == "yes" | tolower(log2_trans) == "y"){
+            log2_trans <- TRUE
           } else {
-            df_el <- c(length(df_el), df_el)
-            df_el <- paste0(df_el, collapse = " / ")
-            tibble(col_name = col_name, factor = df_el) %>% 
-              return()
+            log2_trans <- FALSE
           }
-        }) %>% compact() %>% bind_rows()
-        View(pheno_check)
-        
-
-        
-        # sample selection
-        selected_pheno <- readline('enter phenotype : ')
-        pheno[[selected_pheno]] <- str_replace_all(pheno[[selected_pheno]], pattern = " ", replacement = "_")
-        
-        # re pheno_check
-        pheno_check <- lapply(X = names(pheno), FUN = function(col_name){
-          df <- pheno[col_name]
-          df_el <- df %>% pull(1) %>% unique()
           
-          if(length(df_el) < 2 | length(df_el) > 12){
-            return(NULL) 
+          if(log2_trans){
+            geneExpression <- log2(geneExpression)
+            boxplot(geneExpression[1:10, 1:10])
+          }
+          
+          # phenotype selection
+          if(file.exists(paste0("GSE/", gse_name, "_pheno.txt"))){
+            pheno <- read.delim(file = paste0("GSE/", gse_name, "_pheno.txt"), sep = "\t")
           } else {
-            df_el <- c(length(df_el), df_el)
-            df_el <- paste0(df_el, collapse = " / ")
-            tibble(col_name = col_name, factor = df_el) %>% 
-              return()
+            pheno <- gse_data$pheno@data %>% mutate_all(tolower)  
+            write.table(pheno, file = paste0("GSE/", gse_name, "_pheno.txt"), sep = "\t", row.names = TRUE)
           }
-        }) %>% compact() %>% bind_rows()
-        
-        pheno_check %>% 
-          dplyr::filter(col_name == selected_pheno) %>% 
-          dplyr::pull(factor) %>% 
-          print()
-        
-        # phenotype re-level
-        relevel_check <- readline('Run re-level factor? [y]/[n] : ')
-        if(tolower(relevel_check) == "yes" | tolower(relevel_check) == "y"){
-          relevel_check <- TRUE
-        } else {
-          relevel_check <- FALSE
-        }
-        
-        if(relevel_check){
-          NT_v <- readline("enter NT : ") %>% 
-            str_split(pattern = " ") %>% unlist()
-          TP_v <- readline("enter TP : ") %>% 
-            str_split(pattern = " ") %>% unlist()
           
-          pheno[[selected_pheno]] <- forcats::fct_collapse(pheno[[selected_pheno]], 
-                                                           NT = NT_v, TP = TP_v, other_level = 'NA') 
-          pheno <- pheno %>% dplyr::filter(!!as.symbol(selected_pheno) == "NT" | !!as.symbol(selected_pheno) == "TP")
-          pheno[[selected_pheno]] <- pheno[[selected_pheno]] %>% droplevels()
+          pheno_check <- lapply(X = names(pheno), FUN = function(col_name){
+            df <- pheno[col_name]
+            df_el <- df %>% pull(1) %>% unique()
+            
+            if(length(df_el) < 2 | length(df_el) > 12){
+              return(NULL) 
+            } else {
+              df_el <- c(length(df_el), df_el)
+              df_el <- paste0(df_el, collapse = " / ")
+              tibble(col_name = col_name, factor = df_el) %>% 
+                return()
+            }
+          }) %>% compact() %>% bind_rows()
+          View(pheno_check)
           
-          pheno %>% group_by(!!as.symbol(selected_pheno)) %>% summarise(cnt = n()) %>% 
+          
+          
+          # sample selection
+          selected_pheno <- readline('enter phenotype : ')
+          pheno[[selected_pheno]] <- str_replace_all(pheno[[selected_pheno]], pattern = " ", replacement = "_")
+          
+          # re pheno_check
+          pheno_check <- lapply(X = names(pheno), FUN = function(col_name){
+            df <- pheno[col_name]
+            df_el <- df %>% pull(1) %>% unique()
+            
+            if(length(df_el) < 2 | length(df_el) > 12){
+              return(NULL) 
+            } else {
+              df_el <- c(length(df_el), df_el)
+              df_el <- paste0(df_el, collapse = " / ")
+              tibble(col_name = col_name, factor = df_el) %>% 
+                return()
+            }
+          }) %>% compact() %>% bind_rows()
+          
+          pheno_check %>% 
+            dplyr::filter(col_name == selected_pheno) %>% 
+            dplyr::pull(factor) %>% 
             print()
+          
+          # phenotype re-level
+          relevel_check <- readline('Run re-level factor? [y]/[n] : ')
+          if(tolower(relevel_check) == "yes" | tolower(relevel_check) == "y"){
+            relevel_check <- TRUE
+          } else {
+            relevel_check <- FALSE
+          }
+          
+          if(relevel_check){
+            NT_v <- readline("enter NT : ") %>% 
+              str_split(pattern = " ") %>% unlist()
+            TP_v <- readline("enter TP : ") %>% 
+              str_split(pattern = " ") %>% unlist()
+            
+            pheno[[selected_pheno]] <- forcats::fct_collapse(pheno[[selected_pheno]], 
+                                                             NT = NT_v, TP = TP_v, other_level = 'NA') 
+            pheno <- pheno %>% dplyr::filter(!!as.symbol(selected_pheno) == "NT" | !!as.symbol(selected_pheno) == "TP")
+            pheno[[selected_pheno]] <- pheno[[selected_pheno]] %>% droplevels()
+            
+            pheno %>% group_by(!!as.symbol(selected_pheno)) %>% summarise(cnt = n()) %>% 
+              print()
+          }
+          
+          # selected pheno
+          grp <- pheno %>% 
+            select(starts_with(selected_pheno)) %>% 
+            pull(1) %>% 
+            # filter(str_detect(`source_name_ch1`, "HCC")) %>%
+            lapply(X = ., FUN = tolower) %>% 
+            unlist() %>% 
+            as.factor()
+          # print(grp %>% unique())
+          design <- model.matrix(~0 + grp)
+          View(design)
+          
+          nt_tp_order <- readline("enter NT-TP order : ") %>% 
+            str_split(pattern = " ") %>% unlist()
+          colnames(design) <- nt_tp_order # 데이터에 맞추어 manual로 설정해야 됨
+          
+          # Limma
+          
+          geneExpression_filter <- geneExpression[, pheno %>% rownames()] # rowname
+          limma_result <- run_limma(ge = geneExpression_filter, de = design)
+          write_delim(x = limma_result, path = paste0(base_dir, "/", now_date, "/", gse_name, "_limma.txt"), delim = "\t")
+          multiple_limma[[gse_name]] <- limma_result
         }
-        
-        # selected pheno
-        grp <- pheno %>% 
-          select(starts_with(selected_pheno)) %>% 
-          pull(1) %>% 
-          # filter(str_detect(`source_name_ch1`, "HCC")) %>%
-          lapply(X = ., FUN = tolower) %>% 
-          unlist() %>% 
-          as.factor()
-        # print(grp %>% unique())
-        design <- model.matrix(~0 + grp)
-        View(design)
-        
-        nt_tp_order <- readline("enter NT-TP order : ") %>% 
-          str_split(pattern = " ") %>% unlist()
-        colnames(design) <- nt_tp_order # 데이터에 맞추어 manual로 설정해야 됨
-        
-        # Limma
-        
-        geneExpression_filter <- geneExpression[, pheno %>% rownames()] 
-        multiple_limma[[gse_name]] <- run_limma(ge = geneExpression_filter, de = design)
       }
     },
     error = function(e) {
@@ -426,13 +436,16 @@ getGeneExpressionFromGEO <- function(datasetGeoCode, retrieveGeneSymbols, verbos
       platformsWithHUGOnamelField <- c("GPL5918")
       
       # "symbol"
-      platformsWithSymbolField <- c("GPL1293", "GPL6102", "GPL6104", "GPL6883", "GPL6884", "GPL10558","GPL6947")
+      platformsWithSymbolField <- c("GPL1293", "GPL6102", "GPL6104", "GPL6883", "GPL6884", "GPL10558","GPL6947","GPL8177")
       
       # "GENE_SYMBOL
       platformsWith_GENE_SYMBOL_Field <- c("GPL13497", "GPL14550", "GPL17077", "GPL6480")
       
       # if symbol
-      if(thisGEOplatform %in% c(platformsWithGENEField, platformsWithHUGOnamelField, platformsWithGene_assignmentField, platformsWithGeneSpaceSymbolField, platformsWithGene_SymbolField, platformsWithSymbolField, platformsWith_GENE_SYMBOL_Field)   ) {
+      if(thisGEOplatform %in% c(platformsWithGENEField, platformsWithHUGOnamelField, 
+                                platformsWithGene_assignmentField, platformsWithGeneSpaceSymbolField, 
+                                platformsWithGene_SymbolField, platformsWithSymbolField, 
+                                platformsWith_GENE_SYMBOL_Field)   ) {
         
         emptyGeneSymbol <- ""
         FIRST_GENE_EXPRESSION_INDEX <- 2

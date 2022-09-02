@@ -520,6 +520,7 @@ run_limma <- function(ge, de){
   
   return(target)
 }
+
 rra_extract <- function(ml, logfc = 0.0, fdr = 0.05){
   # combine deg
   combine_degs <- names(ml) %>% 
@@ -531,7 +532,7 @@ rra_extract <- function(ml, logfc = 0.0, fdr = 0.05){
       colnames(tmp) <- c("GENE", list_name)
       return(tmp)
     }) %>% 
-    purrr::reduce(., left_join, by = "GENE") %>% 
+    purrr::reduce(., full_join, by = "GENE") %>% 
     bind_cols(., apply(.[,-1], 1, mean, na.rm = TRUE) %>% 
                 tibble(group = .)) 
   
@@ -591,12 +592,13 @@ rra_extract <- function(ml, logfc = 0.0, fdr = 0.05){
     arrange(Score)
   
   # # 1 - combine deg, 2 - up_down-regulated RRA
-  list(combine_degs = combine_degs, updown_rra = updown_deg_rra) %>% return()
+  list(combine_degs = combine_degs, updown_rra = updown_deg_rra,
+       up_rra = up_deg_rra$Name, down_rra = down_deg_rra$Name) %>% return()
 }
-rra_analysis <- function(m_list, logfc = 0.5, fdr = 0.05, save_path = getwd()){
+rra_analysis <- function(m_list, logfc = 0, fdr = 0.05, save_path = getwd()){
   rra_result <- rra_extract(ml = m_list, logfc = logfc, fdr = fdr)
-  combine_degs_rra <- rra_result[[1]] %>% 
-    dplyr::filter(GENE %in% rra_result[[2]]$Name) %>% 
+  combine_degs_rra <- rra_result$combine_degs %>% 
+    dplyr::filter(GENE %in% rra_result$updown_rra$Name) %>% 
     arrange(desc(group))
   
   up_down_rra_gene <- bind_rows(head(combine_degs_rra, 20),

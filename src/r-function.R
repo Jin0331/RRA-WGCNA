@@ -525,7 +525,7 @@ rra_extract <- function(ml, logfc = 0.0, fdr = 0.05){
   combine_degs <- names(ml) %>% 
     lapply(X = ., FUN = function(list_name){
       tmp <- ml[[list_name]] %>% 
-        dplyr::filter(adj.P.Val < fdr & (logFC > logfc | logFC < -(logfc))) %>% 
+        dplyr::filter(adj.P.Val < fdr & (logFC >= logfc | logFC < -(logfc))) %>% 
         arrange(desc(logFC)) %>%
         dplyr::select(rowname, logFC)
       colnames(tmp) <- c("GENE", list_name)
@@ -536,26 +536,64 @@ rra_extract <- function(ml, logfc = 0.0, fdr = 0.05){
                 tibble(group = .)) 
   
   # up-regulated
-  updown_degs <- names(ml) %>% 
+  # updown_degs <- names(ml) %>% 
+  #   lapply(X = ., FUN = function(list_name){
+  #     ml[[list_name]] %>% 
+  #       dplyr::filter(adj.P.Val < fdr & (logFC > logfc | logFC < -(logfc))) %>% 
+  #       arrange(adj.P.Val) %>% 
+  #       dplyr::pull(rowname) %>%
+  #       return()
+  #   }) 
+
+  # up-regulated  
+  up_degs <- names(ml) %>%
     lapply(X = ., FUN = function(list_name){
-      ml[[list_name]] %>% 
-        dplyr::filter(adj.P.Val < fdr & (logFC > logfc | logFC < -(logfc))) %>% 
-        arrange(adj.P.Val) %>% 
+      ml[[list_name]] %>%
+        dplyr::filter(adj.P.Val < fdr & (logFC >= logfc)) %>%
+        arrange(adj.P.Val) %>%
         dplyr::pull(rowname) %>%
         return()
-    }) 
+    })
+  
+  # down-regulated
+  down_degs <- names(ml) %>%
+    lapply(X = ., FUN = function(list_name){
+      ml[[list_name]] %>%
+        dplyr::filter(adj.P.Val < fdr & (logFC < -(logfc))) %>%
+        arrange(adj.P.Val) %>%
+        dplyr::pull(rowname) %>%
+        return()
+    })
   
   # Aggregate the inputs
+  ## up-regulated RRA
+  up_deg_rra <- aggregateRanks(glist = up_degs, method = "RRA") %>%
+    as_tibble() %>%
+    dplyr::filter(Score <= 0.01) %>% 
+    arrange(Score)
+  
+  down_deg_rra <- aggregateRanks(glist = down_degs, method = "RRA") %>%
+    as_tibble() %>%
+    dplyr::filter(Score <= 0.01) %>% 
+    arrange(Score)
+  
+  print(paste0("up-regulated : ", up_deg_rra %>% nrow()))
+  print(paste0("down-regulated : ", down_deg_rra %>% nrow()))
+  
+  
   # run RRA
-  updown_deg_rra <- aggregateRanks(glist = updown_degs, method = "RRA") %>%
+  # updown_deg_rra <- aggregateRanks(glist = updown_degs, method = "RRA") %>%
+  #   as_tibble() %>%
+  #   dplyr::filter(Score < 0.05) %>%
+  #   arrange(Score)
+  updown_deg_rra <- bind_rows(up_deg_rra, down_deg_rra) %>% 
     as_tibble() %>% 
-    dplyr::filter(Score < 0.05) %>% 
     arrange(Score)
   
   # # 1 - combine deg, 2 - up_down-regulated RRA
   list(combine_degs = combine_degs, updown_rra = updown_deg_rra) %>% return()
 }
-rra_analysis <- function(m_list, logfc = 0, fdr = 0.05, save_path = getwd()){
+rra_analysis <- function(m_list, logfc = 0.5, fdr = 0.05, save_path = getwd()){
   rra_result <- rra_extract(ml = m_list, logfc = logfc, fdr = fdr)
   combine_degs_rra <- rra_result[[1]] %>% 
     dplyr::filter(GENE %in% rra_result[[2]]$Name) %>% 

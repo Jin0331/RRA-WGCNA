@@ -742,7 +742,8 @@ find_key_modulegene <- function(pr_name, base_dir, network, MEs, select_clinical
     left_join(x = ., y = immune_trait, by = c("sampleID" = "sample")) %>% 
     left_join(x = ., y = molecular_trait, by = "sampleID")
   
-  default_clinical <- c('sample_type', 'Subtype_Immune_Model_Based', 'Subtype_Integrative')
+  default_clinical <- c('sample_type', 'Subtype_Immune_Model_Based', 'Subtype_Integrative', 
+                        'pathologic_stage', 'pathologic_T', 'pathologic_N', 'pathologic_M')
   use_clinical <- c(default_clinical, select_clinical)
   
   # clinical trait preprocessing
@@ -751,13 +752,13 @@ find_key_modulegene <- function(pr_name, base_dir, network, MEs, select_clinical
     column_to_rownames(var = "sampleID") %>% 
     dplyr::select(all_of(use_clinical)) %>% 
     mutate(sample_type = ifelse(sample_type == "Primary Tumor", 1, 0),
-           # pathologic_stage = str_remove_all(string = pathologic_stage, pattern = "A|B|C"),
-           # pathologic_T = str_remove_all(string = pathologic_T, pattern = "a|b")
-           ) %>%  # sample type 한정, pathogenic stage
+           pathologic_stage = str_remove_all(string = pathologic_stage, pattern = "A|B|C"),
+           pathologic_T = str_remove_all(string = pathologic_T, pattern = "a|b")
+    ) %>%  # sample type 한정, pathogenic stage
     replace(is.na(.), 0) %>% 
-    mutate_all(as.factor) %>% 
-    mutate_all(as.numeric) %>% 
-    mutate_all(function(value){value - 1})
+    mutate_if(is.character, as.factor) %>% 
+    mutate_if(is.character, as.numeric) %>% 
+    mutate_if(is.character, function(value){value - 1})
   
   # remove trait element. less than 5%
   for(col_name in data_trait %>% colnames()){

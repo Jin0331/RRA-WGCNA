@@ -731,19 +731,21 @@ find_key_modulegene <- function(pr_name, base_dir, network, MEs, select_clinical
                                delim = "\t", show_col_types = FALSE, progress = FALSE) %>% 
     dplyr::select(sample, OS, OS.time, DSS, DSS.time, DFI, DFI.time, PFI, PFI.time)
   
-  immune_trait <- read_delim("https://tcga-pancan-atlas-hub.s3.us-east-1.amazonaws.com/download/Subtype_Immune_Model_Based.txt.gz",
-                             delim = "\t", show_col_types = FALSE, progress = FALSE)
-  
-  molecular_trait <- read_delim("https://tcga-pancan-atlas-hub.s3.us-east-1.amazonaws.com/download/TCGASubtype.20170308.tsv.gz",
-                                delim = "\t", show_col_types = FALSE, progress = FALSE) %>% 
-    select(sampleID, Subtype_Integrative)
+  # immune_trait <- read_delim("https://tcga-pancan-atlas-hub.s3.us-east-1.amazonaws.com/download/Subtype_Immune_Model_Based.txt.gz",
+  #                            delim = "\t", show_col_types = FALSE, progress = FALSE)
+  # 
+  # molecular_trait <- read_delim("https://tcga-pancan-atlas-hub.s3.us-east-1.amazonaws.com/download/TCGASubtype.20170308.tsv.gz",
+  #                               delim = "\t", show_col_types = FALSE, progress = FALSE) %>%
+  #   select(sampleID, Subtype_Integrative)
   
   clinical_trait <- left_join(x = clinical_trait, y = survival_trait, by = c("sampleID" = "sample")) %>% 
     left_join(x = ., y = immune_trait, by = c("sampleID" = "sample")) %>% 
     left_join(x = ., y = molecular_trait, by = "sampleID")
   
-  default_clinical <- c('sample_type', 'Subtype_Immune_Model_Based', 'Subtype_Integrative', 
-                        'pathologic_stage', 'pathologic_T', 'pathologic_N', 'pathologic_M')
+  default_clinical <- c('sample_type', 
+                        # 'Subtype_Immune_Model_Based', 'Subtype_Integrative',
+                        'age_at_initial_pathologic_diagnosis', 'pathologic_stage', 
+                        'pathologic_T', 'pathologic_N', 'pathologic_M')
   use_clinical <- c(default_clinical, select_clinical)
   
   # clinical trait preprocessing
@@ -762,6 +764,10 @@ find_key_modulegene <- function(pr_name, base_dir, network, MEs, select_clinical
   
   # remove trait element. less than 5%
   for(col_name in data_trait %>% colnames()){
+    if(col_name == "age_at_initial_pathologic_diagnosis"){
+      next
+    }
+    
     remove_trait <- data_trait[col_name] %>% 
       group_by_at(1) %>% 
       summarise(prop = n()) %>% 
@@ -834,14 +840,17 @@ find_key_modulegene <- function(pr_name, base_dir, network, MEs, select_clinical
       dplyr::pull(gene)
     
     module_MM <- MM %>% 
-      select(gene, MM = ends_with(sig_module)) %>% 
+      select(gene, MM = starts_with(paste0("ME", sig_module))) %>% 
       filter(gene %in% module_gene, abs(MM) > mm)
     module_MM_gene <- module_MM %>% dplyr::pull(gene)
     
     module_MM_GS_filtered <- lapply(X = data_trait %>% colnames(), FUN = function(t){
       GS %>% 
         select(gene, GS = t) %>% 
-        filter(gene %in% module_MM_gene, abs(GS) > gs)})
+        filter(gene %in% module_MM_gene, abs(GS) > gs) %>% 
+        arrange(desc(abs(GS)))
+      
+      })
     names(module_MM_GS_filtered) <- data_trait %>% colnames()
     
     return(module_MM_GS_filtered)

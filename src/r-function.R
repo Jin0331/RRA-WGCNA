@@ -784,8 +784,7 @@ find_key_modulegene <- function(pr_name, base_dir, network, MEs, select_clinical
   
   default_clinical <- c('sample_type', 
                         # 'Subtype_Immune_Model_Based', 'Subtype_Integrative',
-                        'age_at_initial_pathologic_diagnosis', 'pathologic_stage', 
-                        'pathologic_T', 'pathologic_N', 'pathologic_M')
+                        'pathologic_stage', 'pathologic_T', 'pathologic_N', 'pathologic_M')
   use_clinical <- c(default_clinical, select_clinical)
   
   # clinical trait preprocessing
@@ -831,7 +830,7 @@ find_key_modulegene <- function(pr_name, base_dir, network, MEs, select_clinical
   moduleTraitCor <-  WGCNA::cor(MEs, data_trait, use = "p")
   moduleTraitPvalue <-  corPvalueStudent(moduleTraitCor, nSamples)
   
-  # top 3 sign. module
+  # module selection
   signModule <- lapply(X = 1:nrow(moduleTraitPvalue), FUN = function(row_index){
     trait_cnt <- moduleTraitPvalue[row_index, ] %>% .[. < 0.05] %>% length()
     row_name <- rownames(moduleTraitPvalue)[row_index] %>% 
@@ -841,14 +840,18 @@ find_key_modulegene <- function(pr_name, base_dir, network, MEs, select_clinical
     else
       return(tibble(MM = row_name, signTrait = trait_cnt))
   }) %>% 
-    bind_rows() %>% arrange(desc(signTrait)) %>% 
+    bind_rows() %>% 
+    arrange(desc(signTrait)) %>% 
+    dplyr::filter(signTrait >= 2) %>% 
     dplyr::pull(1) %>% 
-    .[1:3] %>% 
+    # .[1:3] %>% 
     .[!is.na(.)]
   
-  gene_module_key <- network[[2]]$colors %>% names() %>% tibble(gene = .) %>% 
+  gene_module_key <- network[[2]]$colors %>% names() %>% 
+    tibble(gene = .) %>% 
     bind_cols(., tibble(module = moduleColors)) %>% 
-    filter(module %in% signModule)
+    filter(module %in% signModule) %>% 
+    arrange(module)
   
   # Module membership
   MM <- as.data.frame(cor(network[[1]], MEs, use = "p")) 
@@ -893,8 +896,20 @@ find_key_modulegene <- function(pr_name, base_dir, network, MEs, select_clinical
       })
     names(module_MM_GS_filtered) <- data_trait %>% colnames()
     
+    intra_module_size <- lapply(X = intra_module %>% names(), function(im_name){
+      intra_module[[im_name]] %>% bind_rows() %>% 
+        distinct(gene, .keep_all = TRUE) %>% 
+        nrow() %>% 
+        tibble(module = im_name, module_size = .) %>% 
+        return()
+    }) %>% bind_rows() %>% 
+      arrange(desc(module_size))
+    
+    
     return(module_MM_GS_filtered)
   })
+  
+  names(intra_module) <- signModule
   
   total_keyhub <- list()
   for(index in data_trait %>% colnames()){
@@ -920,9 +935,7 @@ find_key_modulegene <- function(pr_name, base_dir, network, MEs, select_clinical
   module_cluster_plot(network = network, save_path = log_save)
   module_trait_plot(moduleTraitCor = moduleTraitCor, moduleTraitPvalue = moduleTraitPvalue,
                     data_trait = data_trait, MEs = MEs, save_path = log_save)
-  gene_module_size_plot(gene_module_key_groph = gene_module_key %>% group_by(module) %>% 
-                          summarise(module_size = n()),
-                        save_path = log_save)
+  gene_module_size_plot(gene_module_key_groph = intra_module_size, save_path = log_save)
   key_hub_intersection_plot(total_keyhub = total_keyhub_merge, save_path = log_save)
 
   total_keyhub <- total_keyhub_merge %>% unlist() %>% unname() %>% unique()
@@ -995,7 +1008,7 @@ gene_module_size_plot <- function(gene_module_key_groph, save_path){
                          sort.val = "asc",
                          sort.by.groups = FALSE,
                          x.text.angle = 90,          # Rotate vertically x axis texts
-                         title = "Top3 Module Size",
+                         title = "After Intra Module analysis(MM-GS), Module Size",
                          ylab = "Module Size",
                          legend.title = "Module",
                          rotate = TRUE,

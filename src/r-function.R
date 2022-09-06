@@ -64,7 +64,7 @@ dec_two <- function(x) {
 
 ora_go_kegg <- function(gs, geneName, module_name, base_dir){
   # Create directory
-  save_path <- paste0(base_dir, "/GO_KEGG_ORA/")
+  save_path <- paste0(base_dir, "/GO_KEGG_ORA/", module_name, "/")
   dir.create(path = save_path, showWarnings = FALSE, recursive = TRUE)
   
   # Symbol to Entrez
@@ -1027,7 +1027,7 @@ find_key_modulegene <- function(pr_name, base_dir, network, MEs, select_clinical
   
   
   # return(list(total_keyhub = total_keyhub, clinical_trait = data_trait, total_keyhub_merge = total_keyhub_merge, network = network))
-  return(list(intra_module_gene = intra_module_bind, clinical_trait = data_trait, network = network))
+  return(list(intra_module = intra_module, intra_module_gene = intra_module_bind, clinical_trait = data_trait, network = network))
   
 }
 
@@ -1129,7 +1129,16 @@ gene_selection <- function(base_dir, total_keyhub_list, over_sampling){
   log_save <- paste(base_dir, "ML_LOG/", sep = "/")
   dir.create(log_save, recursive = T, showWarnings = FALSE)
   
-  trait_names <- total_keyhub_list %>% names()
+  total_keyhub_list_filter <- total_keyhub_list %>% lapply(X = ., FUN = function(df){
+    if(nrow(df) <= 0)
+      return(NULL)
+    else{
+      return(df)
+    }
+  }) %>% compact()
+  
+  
+  trait_names <- total_keyhub_list_filter %>% names()
   gene_selection_list <- list()
   
   for(trait_name in trait_names){
@@ -1139,13 +1148,13 @@ gene_selection <- function(base_dir, total_keyhub_list, over_sampling){
       rownames_to_column(var = "sample") %>% 
       inner_join(x = ., y = geneExpression %>% 
                    rownames_to_column(var = "sample") %>% 
-                   select(sample, all_of(total_keyhub_list[[Y_col_name]])),
+                   select(sample, all_of(total_keyhub_list[[Y_col_name]]$gene)),
                  by = "sample") %>% 
       column_to_rownames(var = "sample")
     
     # X, y 분리
-    y_df <- DF %>% select(-all_of(total_keyhub_list[[Y_col_name]]))
-    x_df <- DF %>% select_at(all_of(total_keyhub_list[[Y_col_name]]))
+    y_df <- DF %>% select(-all_of(total_keyhub_list[[Y_col_name]]$gene))
+    x_df <- DF %>% select_at(all_of(total_keyhub_list[[Y_col_name]]$gene))
     
     # gene selection
     lasso_coef <- feature_selection_LASSO(x_df, y_df, over_sampling)

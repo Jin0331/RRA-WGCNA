@@ -7,8 +7,7 @@ if(!exists("key_hub_gene")){
 }
 
 # intra-extra analysis for top hub gene
-total_keyhub <- key_hub_gene$total_keyhub
-total_keyhub_list <- key_hub_gene$total_keyhub_merge
+total_keyhub <- key_hub_gene$intra_module$turquoise
 clinical_trait <- key_hub_gene$clinical_trait
 geneExpression <- key_hub_gene$network$deg
 
@@ -27,9 +26,6 @@ final_candidate_gene %>%
   tibble(GENE_NAME = .) %>% 
   arrange(GENE_NAME) %>% 
   write_delim(file = paste0(base_dir, "/",pr_name, "_final_candidate.csv"), delim = ",")
-
-
-
 
 
 

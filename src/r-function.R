@@ -26,7 +26,7 @@ suppressMessages({
 time_stamp <- Sys.time() %>% str_split(pattern = " ") %>% 
   unlist() %>% .[1]
 pr_name <- readline('enter cancer type : ')
-base_dir <- paste("WGCNA_RRA_RESULT", pr_name, time_stamp,sep = "/")
+base_dir <- paste("WGCNA_PIPELINE_RESULT", pr_name, time_stamp,sep = "/")
 dir.create(base_dir, showWarnings = FALSE, recursive = TRUE)
 
 # function ----
@@ -812,8 +812,8 @@ network_preprocessing <- function(pr_name, robustdegs, mch = 0.25, time_stamp){
     # network construct
     # net construct
     # time_stamp <- Sys.time()
-    log_save <- paste("WGCNA_LOG", pr_name, time_stamp, sep = "/")
-    dir.create(paste("WGCNA_LOG", pr_name, time_stamp, sep = "/"), showWarnings = FALSE, recursive = TRUE)
+    log_save <- paste(base_dir, "WGCNA_LOG", pr_name, time_stamp, sep = "/")
+    dir.create(paste(base_dir, "WGCNA_LOG", pr_name, time_stamp, sep = "/"), showWarnings = FALSE, recursive = TRUE)
     net <- blockwiseModules(datExpr = robustdeg_ge, 
                             power = sft,
                             corType = "pearson",

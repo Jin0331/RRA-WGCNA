@@ -9,11 +9,14 @@ suppressMessages({
   library(TCGAbiolinks)
   library(reticulate)
   library(ggVennDiagram)
-  library(tidyverse)
   library(WGCNA)
   library(CorLevelPlot)
   library(caret)
   library(DataEditR)
+  library(clusterProfiler)
+  library(enrichplot)
+  library(org.Hs.eg.db)
+  library(tidyverse)
   
   use_condaenv(condaenv = "geo-py")
   source_python("src/py-function.py")
@@ -57,6 +60,81 @@ retry <- function(expr, isError=function(x) "try-error" %in% class(x), maxErrors
 dec_two <- function(x) {
   return (format(round(x, 2), nsmall = 2));
 }
+
+
+ora_go_kegg <- function(gs, geneName, module_name, base_dir){
+  # Create directory
+  save_path <- paste0(base_dir, "/GO_KEGG_ORA/")
+  dir.create(path = save_path, showWarnings = FALSE, recursive = TRUE)
+  
+  # Symbol to Entrez
+  geneList <- gs
+  names(geneList) <- bitr(geneName, 
+                          fromType="ALIAS", 
+                          toType = "ENTREZID",
+                          OrgDb = org.Hs.eg.db, 
+                          drop = FALSE) %>% 
+    distinct(ALIAS, .keep_all = TRUE) %>% 
+    pull(2)
+  
+  # GO ORA - BP
+  ego_ora_bp <- enrichGO(names(geneList), 
+                         OrgDb=org.Hs.eg.db, 
+                         ont="BP", 
+                         pAdjustMethod = "bonferroni",
+                         pvalueCutoff=0.01,
+                         qvalueCutoff=0.05,
+                         readable=T) %>%
+    mutate(., Description = paste0("(", ID ,") ", Description))
+  
+  p_ora_bp <- barplot(ego_ora_bp, title = paste0("GO:Biological Process(BP)-", module_name), 
+                      showCategory = 20) + theme_linedraw(base_size = 30)
+  
+  # GO ORA CC
+  ego_ora_cc <- enrichGO(names(geneList), 
+                         OrgDb=org.Hs.eg.db, 
+                         ont="CC", 
+                         pAdjustMethod = "bonferroni",
+                         pvalueCutoff=0.01,
+                         qvalueCutoff=0.05,
+                         readable=T) %>%
+    mutate(., Description = paste0("(", ID ,") ", Description))
+  p_ora_cc <- barplot(ego_ora_cc, title = paste0("GO:Cellular Component(CC)-", module_name), 
+                      showCategory = 20) + theme_linedraw(base_size = 30)
+  
+  # GO ORA MF
+  ego_ora_mf <- enrichGO(names(geneList), 
+                         OrgDb=org.Hs.eg.db, 
+                         ont="MF", 
+                         pAdjustMethod = "bonferroni",
+                         pvalueCutoff=0.01,
+                         qvalueCutoff=0.05,
+                         readable=T) %>%
+    mutate(., Description = paste0("(", ID ,") ", Description))
+  
+  p_ora_mf <- barplot(ego_ora_mf, title = paste0("GO:Molecular Function(MF)-", module_name), 
+                      showCategory = 20) + theme_linedraw(base_size = 30)
+  
+  
+  
+  # KEGG
+  kk <- enrichKEGG(gene = names(geneList), organism = 'hsa', pvalueCutoff = 0.05) 
+  p_kk <- barplot(kk, title = paste0("KEGG -", module_name), 
+                  showCategory = 20) + theme_linedraw(base_size = 30)
+  
+  # table save
+  ego_ora_bp@result %>% write_csv(file = paste0(save_path, module_name, "-GO-BP.csv"))
+  ego_ora_cc@result %>% write_csv(file = paste0(save_path, module_name, "-GO-CC.csv"))
+  ego_ora_mf@result %>% write_csv(file = paste0(save_path, module_name, "-GO-MF.csv"))
+  kk@result %>% write_csv(file = paste0(save_path, module_name, "-KEGG.csv"))
+  
+  # graph save
+  ggsave(plot = p_ora_bp, filename = paste0(save_path, module_name,"_GO-BP.png"), width = 40, height = 25, dpi = 300)
+  ggsave(plot = p_ora_cc, filename = paste0(save_path, module_name,"_GO-CC.png"), width = 40, height = 25, dpi = 300)
+  ggsave(plot = p_ora_mf, filename = paste0(save_path, module_name,"_GO-MF.png"), width = 40, height = 25, dpi = 300)
+  ggsave(plot = p_kk, filename = paste0(save_path, module_name,"_KEGG.png"), width = 40, height = 25, dpi = 300)
+}
+
 
 # mapping function ====
 symbol_mapping <- function(ge, col_name, platform_ann_df){
@@ -660,7 +738,7 @@ mergecutheight_test <- function(pr_name, robustdegs){
   return(list(max_mch = max_module, max_module_cnt = max_module_cnt))
 }
 network_preprocessing <- function(pr_name, robustdegs, mch = 0.25, time_stamp){
-  allowWGCNAThreads(nThreads = 15)
+  allowWGCNAThreads(nThreads = 20)
   
   suppressMessages({
     cancer_fpkm <- load_tcga_dataset(pkl_path = "PKL/", raw_path = "RAW_DATA/", cancer_type = pr_name) %>% 
@@ -778,9 +856,9 @@ find_key_modulegene <- function(pr_name, base_dir, network, MEs, select_clinical
   #                               delim = "\t", show_col_types = FALSE, progress = FALSE) %>%
   #   select(sampleID, Subtype_Integrative)
   
-  clinical_trait <- left_join(x = clinical_trait, y = survival_trait, by = c("sampleID" = "sample")) %>% 
-    left_join(x = ., y = immune_trait, by = c("sampleID" = "sample")) %>% 
-    left_join(x = ., y = molecular_trait, by = "sampleID")
+  clinical_trait <- left_join(x = clinical_trait, y = survival_trait, by = c("sampleID" = "sample"))
+    # left_join(x = ., y = immune_trait, by = c("sampleID" = "sample")) %>% 
+    # left_join(x = ., y = molecular_trait, by = "sampleID")
   
   default_clinical <- c('sample_type', 
                         # 'Subtype_Immune_Model_Based', 'Subtype_Integrative',
@@ -896,39 +974,47 @@ find_key_modulegene <- function(pr_name, base_dir, network, MEs, select_clinical
       })
     names(module_MM_GS_filtered) <- data_trait %>% colnames()
     
-    intra_module_size <- lapply(X = intra_module %>% names(), function(im_name){
-      intra_module[[im_name]] %>% bind_rows() %>% 
-        distinct(gene, .keep_all = TRUE) %>% 
-        nrow() %>% 
-        tibble(module = im_name, module_size = .) %>% 
-        return()
-    }) %>% bind_rows() %>% 
-      arrange(desc(module_size))
-    
-    
     return(module_MM_GS_filtered)
   })
-  
   names(intra_module) <- signModule
   
-  total_keyhub <- list()
-  for(index in data_trait %>% colnames()){
-    tmp <- lapply(X = intra_module, FUN = function(trait){
-      trait[[index]]
-    }) %>% bind_rows() %>% dplyr::pull(gene)
-    
-    if(length(tmp) > 1)
-      total_keyhub[[index]] <- tmp
-  }
-  
-  total_keyhub_merge <- names(total_keyhub) %>% lapply(X = ., FUN = function(lname){
-    col_name <- lname %>% str_split(pattern = "\\.") %>% unlist %>% .[1]
-    
-    tibble(gene = total_keyhub[[lname]], col_name) %>% return()
+  intra_module_size <- lapply(X = intra_module %>% names(), function(im_name){
+    intra_module[[im_name]] %>% bind_rows() %>% 
+      distinct(gene, .keep_all = TRUE) %>% 
+      nrow() %>% 
+      tibble(module = im_name, module_size = .) %>% 
+      return()
   }) %>% bind_rows() %>% 
-    split(x = ., f = .$col_name) %>% 
-    lapply(X = ., FUN = function(df){df %>% dplyr::pull(gene)})
+    arrange(desc(module_size))
   
+  intra_module_bind <- lapply(X = intra_module %>% names(), function(im_name){
+    intra_module[[im_name]] %>% bind_rows() %>% 
+      distinct(gene, .keep_all = TRUE) %>%
+      arrange(gene) %>% 
+      return()
+  })
+  names(intra_module_bind) <- signModule
+  
+  # # module eigen gene intersection
+  # total_keyhub <- list()
+  # for(index in data_trait %>% colnames()){
+  #   tmp <- lapply(X = intra_module, FUN = function(trait){
+  #     trait[[index]]
+  #   }) %>% bind_rows() %>% dplyr::pull(gene)
+  #   
+  #   if(length(tmp) > 1)
+  #     total_keyhub[[index]] <- tmp
+  # }
+  # 
+  # total_keyhub_merge <- names(total_keyhub) %>% lapply(X = ., FUN = function(lname){
+  #   col_name <- lname %>% str_split(pattern = "\\.") %>% unlist %>% .[1]
+  #   
+  #   tibble(gene = total_keyhub[[lname]], col_name) %>% return()
+  # }) %>% bind_rows() %>% 
+  #   split(x = ., f = .$col_name) %>% 
+  #   lapply(X = ., FUN = function(df){df %>% dplyr::pull(gene)})
+  
+  # total_keyhub <- total_keyhub_merge %>% unlist() %>% unname() %>% unique()
   
   # plot save
   sample_cluster_plot(network = network[[1]], clinical_trait = data_trait, save_path = log_save)
@@ -936,12 +1022,12 @@ find_key_modulegene <- function(pr_name, base_dir, network, MEs, select_clinical
   module_trait_plot(moduleTraitCor = moduleTraitCor, moduleTraitPvalue = moduleTraitPvalue,
                     data_trait = data_trait, MEs = MEs, save_path = log_save)
   gene_module_size_plot(gene_module_key_groph = intra_module_size, save_path = log_save)
-  key_hub_intersection_plot(total_keyhub = total_keyhub_merge, save_path = log_save)
+  # key_hub_intersection_plot(total_keyhub = total_keyhub_merge, save_path = log_save)
 
-  total_keyhub <- total_keyhub_merge %>% unlist() %>% unname() %>% unique()
   
-  return(list(total_keyhub = total_keyhub, clinical_trait = data_trait, total_keyhub_merge = total_keyhub_merge, network = network))
   
+  # return(list(total_keyhub = total_keyhub, clinical_trait = data_trait, total_keyhub_merge = total_keyhub_merge, network = network))
+  return(list(intra_module_gene = intra_module_bind, clinical_trait = data_trait, network = network))
   
 }
 

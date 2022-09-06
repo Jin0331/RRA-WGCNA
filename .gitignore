@@ -21,4 +21,5 @@ src/rcy3-connect.R
 src/db_connect.R
 src/test.R
 WGCNA_RRA_RESULT/
+WGCNA_PIPELINE_RESULT/
 .ipynb_checkpoints/

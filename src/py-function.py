@@ -47,7 +47,7 @@ def roc_auc_function(y_test, y_score, num_class):
     roc_auc["macro"] = auc(fpr["macro"], tpr["macro"])
 
     return fpr, tpr, roc_auc
-def roc_acu_calculator(DF, feature_name, log_save, over_sampling):
+def roc_acu_calculator(DF, feature_name, log_save, over_sampling, module_name):
   X = DF.iloc[:, 1:]
   y = DF.iloc[:, 0]
   
@@ -117,9 +117,9 @@ def roc_acu_calculator(DF, feature_name, log_save, over_sampling):
     plt.ylim([0.0, 1.05])
     plt.xlabel('False Positive Rate (FPR)')
     plt.ylabel('True Positive Rate (TPR)')
-    plt.title(feature_name + " (Multi-class)")
+    plt.title(module_name + "_" + feature_name + " (Multi-class)")
     plt.legend(loc="lower right")
-    plt.savefig(log_save + "/" + feature_name + '_ROC_AUC.png')
+    plt.savefig(log_save + "/" + module_name + "_" + feature_name + '_ROC_AUC.png')
     plt.clf()
     
     # calculation
@@ -140,13 +140,14 @@ def roc_acu_calculator(DF, feature_name, log_save, over_sampling):
     plt.plot([0, 1], [0, 1], color='navy', lw=lw, linestyle='--')
     plt.xlabel('False Positive Rate (FPR)')
     plt.ylabel('True Positive Rate (TPR)')
-    plt.title(feature_name + " (Binary-class")
+    plt.title(module_name + "_" + feature_name + " (Binary-class")
     plt.legend(loc="best")
-    plt.savefig(log_save + "/" + feature_name + '_ROC_AUC.png')
+    plt.savefig(log_save + "/" + module_name + "_" + feature_name + '_ROC_AUC.png')
     plt.clf()
     
     return roc_auc
-def roc_acu_calculator_cv(DF, feature_name, log_save, over_sampling):
+  
+def roc_acu_calculator_cv(DF, feature_name, log_save, over_sampling, module_name):
     X = DF.iloc[:, 1:]
     y = DF.iloc[:, 0]
 
@@ -221,9 +222,9 @@ def roc_acu_calculator_cv(DF, feature_name, log_save, over_sampling):
     # plt.ylim([0.0, 1.05])
     plt.xlabel('False Positive Rate (FPR)')
     plt.ylabel('True Positive Rate (TPR)')
-    plt.title(feature_name + "_Multi-class-CV")
+    plt.title(module_name + "_" + feature_name + "_Multi-class-CV")
     plt.legend(loc="lower right")
-    plt.savefig(log_save + "/Step4_" + feature_name + '_ROC_AUC_CV.png')
+    plt.savefig(log_save + "/Step4_" + module_name + "_" + feature_name + '_ROC_AUC_CV.png')
     plt.close()
 
     return roc_auc_fold["macro"]

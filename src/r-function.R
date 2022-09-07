@@ -1137,7 +1137,6 @@ gene_selection <- function(base_dir, total_keyhub_list, over_sampling){
     }
   }) %>% compact()
   
-  
   trait_names <- total_keyhub_list_filter %>% names()
   gene_selection_list <- list()
   
@@ -1156,6 +1155,9 @@ gene_selection <- function(base_dir, total_keyhub_list, over_sampling){
     y_df <- DF %>% select(-all_of(total_keyhub_list[[Y_col_name]]$gene))
     x_df <- DF %>% select_at(all_of(total_keyhub_list[[Y_col_name]]$gene))
     
+    if(ncol(x_df) <= 1)
+      next
+    
     # gene selection
     lasso_coef <- feature_selection_LASSO(x_df, y_df, over_sampling)
     lasso_selection_gene <- x_df %>% select(which(abs(lasso_coef) > 0)) %>% colnames()
@@ -1164,13 +1166,14 @@ gene_selection <- function(base_dir, total_keyhub_list, over_sampling){
   }
   
   # venn diagram
-  seleted_gene_intersection_plot(gene_selection_list, log_save)
+  # seleted_gene_intersection_plot(gene_selection_list, log_save)
   
   
   return(gene_selection_list)
   
 }
-ml_validation <- function(base_dir, selected_gene, over_sampling, cv){
+
+ml_validation <- function(base_dir, selected_gene, over_sampling, cv, module_name){
   
   log_save <- paste(base_dir, "ML_LOG/", sep = "/")
   dir.create(log_save, recursive = T, showWarnings = FALSE)
@@ -1189,16 +1192,16 @@ ml_validation <- function(base_dir, selected_gene, over_sampling, cv){
       column_to_rownames(var = "sample")
     # gene selection
     if(!cv){
-      roc_auc_list[[trait_name]] <- roc_acu_calculator(DF, Y_col_name, log_save, over_sampling = over_sampling)
+      roc_auc_list[[trait_name]] <- roc_acu_calculator(DF, Y_col_name, log_save, over_sampling = over_sampling, module_name = module_name)
     } else {
-      roc_auc_list[[trait_name]] <- roc_acu_calculator_cv(DF, Y_col_name, log_save, over_sampling = over_sampling)
+      roc_auc_list[[trait_name]] <- roc_acu_calculator_cv(DF, Y_col_name, log_save, over_sampling = over_sampling, module_name = module_name)
     }
   }
   
-  return(roc_auc_list)
+  return(roc_aut_result = roc_auc_list)
   
 }
-auc_cutoff <- function(sg_list, auc_cutoff = 0.75){
+auc_cutoff <- function(sg_list, selected_gene, auc_cutoff = 0.75){
   clinical_name <- sg_list %>% names()
   auc_cutoff_gene <- lapply(X = clinical_name, FUN = function(list_name){
     value <- sg_list[[list_name]]
@@ -1217,7 +1220,7 @@ auc_cutoff <- function(sg_list, auc_cutoff = 0.75){
     unlist() %>% 
     unique()
   
-  return(auc_cutoff_gene)
+  return(list(auc_cutoff = auc_cutoff_gene, trait = clinical_name))
 }
 
 seleted_gene_intersection_plot <- function(gene_selection_list, save_path){

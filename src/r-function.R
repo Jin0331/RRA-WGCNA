@@ -16,6 +16,8 @@ suppressMessages({
   library(clusterProfiler)
   library(enrichplot)
   library(org.Hs.eg.db)
+  library(survival)
+  library(survminer)
   library(tidyverse)
   
   use_condaenv(condaenv = "geo-py")
@@ -60,7 +62,6 @@ retry <- function(expr, isError=function(x) "try-error" %in% class(x), maxErrors
 dec_two <- function(x) {
   return (format(round(x, 2), nsmall = 2));
 }
-
 
 ora_go_kegg <- function(gs, geneName, module_name, base_dir){
   # Create directory
@@ -133,6 +134,39 @@ ora_go_kegg <- function(gs, geneName, module_name, base_dir){
   ggsave(plot = p_ora_cc, filename = paste0(save_path, module_name,"_GO-CC.png"), width = 40, height = 25, dpi = 300)
   ggsave(plot = p_ora_mf, filename = paste0(save_path, module_name,"_GO-MF.png"), width = 40, height = 25, dpi = 300)
   ggsave(plot = p_kk, filename = paste0(save_path, module_name,"_KEGG.png"), width = 40, height = 25, dpi = 300)
+}
+
+survival_analysis <- function(base_dir, geneExpression){
+  log_save <- paste(base_dir, "OS", sep = "/")
+  dir.create(paste(base_dir, "OS", sep = "/"), showWarnings = FALSE, recursive = TRUE)
+  
+  suv_exp <- geneExpression %>% rownames_to_column(var = "sample") %>% 
+    select(sample, all_of(string_filtering))
+  deg_list <- suv_exp %>% colnames() %>% .[-1]
+  
+  survival_trait <- read_delim(paste0("https://tcga-xena-hub.s3.us-east-1.amazonaws.com/download/survival%2F",pr_name,"_survival.txt"),
+                               delim = "\t", show_col_types = FALSE, progress = FALSE) %>% 
+    dplyr::select(sample, OS, OS.time, DSS, DSS.time, DFI, DFI.time, PFI, PFI.time)
+  suv_exp_trait <- inner_join(x = suv_exp, y = survival_trait, by = "sample")
+  
+  os_list <- list()
+  for(gene_name in deg_list){
+    print(gene_name)
+    exp_median_group <- suv_exp_trait %>% dplyr::mutate(group = ifelse(.[[gene_name]] > median(.[[gene_name]]), "H", "L"))
+    exp_median_group$group <- exp_median_group$group %>% factor(labels = c("High-exp", "Low-exp"))
+    
+    sfit <- survfit(Surv(OS.time, OS) ~ group, data = exp_median_group)
+    sdf <- survdiff(Surv(OS.time, OS) ~ group, data = exp_median_group)
+    p.val <- 1 - pchisq(sdf$chisq, length(sdf$n) - 1)
+    
+    os_list[[gene_name]] <- tibble(GENE = gene_name, p.value = p.val)
+    
+    ggsurvplot(sfit, title = paste0(gene_name, "-Expression High-Low(Median)"), pval = T)
+    
+    ggsave(filename = paste0(log_save, "/", gene_name, "-OS.png"))
+    dev.off()
+  }
+  os_list %>% bind_rows() %>% return()
 }
 
 

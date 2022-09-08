@@ -6,13 +6,14 @@ if(!exists("key_hub_gene")){
   load(paste0(base_dir, "/Step3_KEY_HUB_GENE.RData"))
 }
 
-# intra-extra analysis for top hub gene
-
+# Machine learning validation
 module_candidate <- list()
-for(m_name in names(key_hub_gene$intra_module)){
+clinical_trait <- key_hub_gene$clinical_trait
+geneExpression <- key_hub_gene$network$deg
+
+for(m_name in names(key_hub_gene$intra_module)[6:7]){
+  print(m_name)
   total_keyhub <- key_hub_gene$intra_module[[m_name]]
-  clinical_trait <- key_hub_gene$clinical_trait
-  geneExpression <- key_hub_gene$network$deg
   
   # gene selection
   selected_gene <- gene_selection(base_dir = base_dir,
@@ -32,5 +33,20 @@ for(m_name in names(key_hub_gene$intra_module)){
            MODULE = m_name) %>% 
     arrange(GENE_NAME)
 }
-
 save(module_candidate, file = paste0(base_dir, "/Step4_MODULE_SELECTED_GENE.RData"))
+
+
+# STRING, Survival analysis
+string_filtering <- module_candidate %>% bind_rows() %>% 
+  pull(1) %>% 
+  string_network() %>% 
+  filter(score >= 0.8) 
+string_filtering <- c(string_filtering$preferredName_A, string_filtering$preferredName_B) %>% unique()
+
+
+library(survival)
+library(survminer)
+
+suv_exp <- geneExpression %>% rownames_to_column(var = "sample") %>% 
+  select(sample, all_of(string_filtering))
+

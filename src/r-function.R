@@ -1278,7 +1278,7 @@ string_network <- function(hub_gene){
   network_colname <- c('stringId_A','stringId_B','preferredName_A','preferredName_B','ncbiTaxonId',
                        'score','nscore','fscore','pscore','ascore','escore','dscore','tscore')
   
-  ppi_network <- POST(request_url, body = params, encode = "form") %>%  
+  ppi_network <- httr::POST(request_url, body = params, encode = "form") %>%  
     httr::content(encoding = "UTF-8") 
   colnames(ppi_network) <- network_colname
   ppi_network <- ppi_network %>% arrange(preferredName_A) %>% distinct_all()

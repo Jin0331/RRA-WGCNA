@@ -18,7 +18,9 @@ suppressMessages({
   library(org.Hs.eg.db)
   library(survival)
   library(survminer)
+  library(rbioapi)
   library(tidyverse)
+  
   
   use_condaenv(condaenv = "geo-py")
   source_python("src/py-function.py")
@@ -65,7 +67,7 @@ dec_two <- function(x) {
 
 ora_go_kegg <- function(gs, geneName, module_name, base_dir){
   # Create directory
-  save_path <- paste0(base_dir, "/GO_KEGG_ORA/", module_name, "/")
+  save_path <- paste0(base_dir, "ANALYSIS/GO_KEGG_ORA/", module_name, "/")
   dir.create(path = save_path, showWarnings = FALSE, recursive = TRUE)
   
   # Symbol to Entrez
@@ -136,44 +138,97 @@ ora_go_kegg <- function(gs, geneName, module_name, base_dir){
   ggsave(plot = p_kk, filename = paste0(save_path, module_name,"_KEGG.png"), width = 40, height = 25, dpi = 300)
 }
 
-# Survival analysis
-survival_analysis <- function(base_dir, geneExpression, string_filtering){
-  log_save <- paste(base_dir, "OS", sep = "/")
-  dir.create(paste(base_dir, "OS", sep = "/"), showWarnings = FALSE, recursive = TRUE)
+# STRING analysis
+string_analysis <- function(mc, base_dir, score = 400){
+  log_save <- paste(base_dir, "ANALYSIS/STRING", sep = "/")
+  dir.create(paste(base_dir, "ANALYSIS/STRING", sep = "/"), showWarnings = FALSE, recursive = TRUE)
   
-  suv_exp <- geneExpression %>% rownames_to_column(var = "sample") %>% 
-    select(sample, all_of(string_filtering)) %>% 
-    filter(str_ends(sample, "-01"))
-  deg_list <- suv_exp %>% colnames() %>% .[-1]
+  
+  suppressMessages({
+    string_filtering <- lapply(X = names(mc), FUN = function(mc_name){
+      g <- mc[[mc_name]]
+      proteins_mapped <- rba_string_map_ids(ids = g$GENE_NAME, species = 9606)
+      int_net <- rba_string_interactions_network(ids = proteins_mapped$stringId,
+                                                 species = 9606,
+                                                 required_score = score) # minimum confidence
+      
+      rba_string_network_image(ids = proteins_mapped$stringId,
+                               image_format = "highres_image",
+                               species = 9606,
+                               save_image = paste0(getwd(),
+                                                   "/", base_dir, "/ANALYSIS/STRING/", mc_name, "-PPI.png"),
+                               required_score = 400,
+                               network_flavor = "confidence", 
+                               hide_disconnected_nodes = TRUE)
+      
+      
+      string_filtered_g <- c(int_net$preferredName_A, int_net$preferredName_B) %>% 
+        unique() %>% 
+        tibble(GENE_NAME = .) %>% 
+        inner_join(x = g, y = ., by = "GENE_NAME")
+      
+      return(string_filtered_g)
+    })  
+  })
+  
+  names(string_filtering) <- names(mc)
+  
+  return(string_filtering)
+}
+
+# Survival analysis
+survival_analysis <- function(base_dir, geneExpression, mc){
+  log_save <- paste(base_dir, "ANALYSIS/OS", sep = "/")
+  dir.create(paste(base_dir, "ANALYSIS/OS", sep = "/"), showWarnings = FALSE, recursive = TRUE)
+  
+  
   
   survival_trait <- read_delim(paste0("https://tcga-xena-hub.s3.us-east-1.amazonaws.com/download/survival%2F",pr_name,"_survival.txt"),
                                delim = "\t", show_col_types = FALSE, progress = FALSE) %>% 
     dplyr::select(sample, OS, OS.time, DSS, DSS.time, DFI, DFI.time, PFI, PFI.time)
-  suv_exp_trait <- inner_join(x = suv_exp, y = survival_trait, by = "sample")
   
-  os_list <- list()
-  for(gene_name in deg_list){
-    print(gene_name)
-    exp_median <<- suv_exp_trait %>% 
-      dplyr::mutate(group = ifelse(.[[gene_name]] > median(.[[gene_name]]), "H", "L"))
+  survival_filtering <- lapply(X = names(mc), function(mc_name){
+    g <- mc[[mc_name]] %>% pull(1)
+    suv_exp <- geneExpression %>% rownames_to_column(var = "sample") %>% 
+      select(sample, all_of(g)) %>% 
+      filter(str_ends(sample, "-01"))
     
-    exp_median <<- exp_median %>% 
-      mutate(group = factor(group, labels = c("High-exp", "Low-exp")))
+    deg_list <- suv_exp %>% colnames() %>% .[-1]
+    suv_exp_trait <- inner_join(x = suv_exp, y = survival_trait, by = "sample")
     
-    sfit <- survfit(Surv(OS.time, OS) ~ group, data = exp_median)
-    sdf <- survdiff(Surv(OS.time, OS) ~ group, data = exp_median)
-    p.val <- 1 - pchisq(sdf$chisq, length(sdf$n) - 1)
+    os_list <- list()
+    dir.create(paste(log_save, mc_name, sep = "/"), showWarnings = FALSE, recursive = TRUE)
+    for(gene_name in deg_list){
+      print(gene_name)
+      exp_median <<- suv_exp_trait %>% 
+        mutate(group = ifelse(.[[gene_name]] > median(.[[gene_name]]), "High-exp", "Low-exp")) %>% 
+        mutate(group = factor(group))
+      
+      exp_median$group <- factor(exp_median$group, levels = c("Low-exp", "High-exp"))
+      
+      # exp_median <<- exp_median %>% 
+      #   mutate(group = factor(group, labels = c("High-exp", "Low-exp")))
+      
+      sfit <- survfit(Surv(OS.time, OS) ~ group, data = exp_median)
+      sdf <- survdiff(Surv(OS.time, OS) ~ group, data = exp_median)
+      coxph <- summary(coxph(Surv(OS.time, OS) ~ group, data = exp_median))
+      
+      hazard_ratio <- coxph$coefficients[[2]]
+      p.val <- 1 - pchisq(sdf$chisq, length(sdf$n) - 1)
+      
+      ggsurvplot(sfit, title = paste0(gene_name, "-Expression High-Low(Median)"), pval = TRUE)
+      ggsave(filename = paste0(log_save, "/", mc_name, "/", gene_name, "-OS.png"), device = "png")
+      
+      os_list[[gene_name]] <- tibble(GENE_NAME = gene_name, HR = hazard_ratio, `KM-p.value` = p.val) 
+    }
     
-    ggsurvplot(sfit, title = paste0(gene_name, "-Expression High-Low(Median)"), pval = T)
-    ggsave(filename = paste0(log_save, "/", gene_name, "-OS.png"), device = "png")
-    
-    os_list[[gene_name]] <- tibble(GENE = gene_name, p.value = p.val) 
-  }
-  
-  os_list %>% bind_rows() %>% arrange(p.value) %>% return()
+    os_list %>% bind_rows() %>% 
+      inner_join(x =  mc[[mc_name]], y = ., by = "GENE_NAME") %>% 
+      return()
+})
+  names(survival_analysis) <- names(mc)
+  return(survival_analysis)
 }
-
-
 
 # mapping function ====
 symbol_mapping <- function(ge, col_name, platform_ann_df){

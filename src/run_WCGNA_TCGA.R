@@ -32,7 +32,7 @@ save(key_hub_gene, file = paste0(base_dir, "/Step3_KEY_HUB_GENE.RData"))
 
 
 # GO / KEGG enrichment analysis (ORA)
-ora_go_kegg(gs = key_hub_gene$intra_module_gene$turquoise$GS,
-            geneName = key_hub_gene$intra_module_gene$turquoise$gene,
-            module_name = "Turquoise",
-            base_dir = base_dir)
+# ora_go_kegg(gs = key_hub_gene$intra_module_gene$turquoise$GS,
+#             geneName = key_hub_gene$intra_module_gene$turquoise$gene,
+#             module_name = "Turquoise",
+#             base_dir = base_dir)

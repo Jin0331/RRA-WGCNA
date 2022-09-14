@@ -15,7 +15,10 @@ GDCdata/
 RAW_DATA/
 PKL/
 Cytoscape/
+Data/
+ELMER.example/
 *.ipynb
+*.rda
 src/.ipynb_checkpoints
 src/rcy3-connect.R
 src/db_connect.R

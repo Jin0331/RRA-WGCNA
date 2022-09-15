@@ -19,6 +19,8 @@ suppressMessages({
   library(survival)
   library(survminer)
   library(rbioapi)
+  library(ELMER)
+  library(MultiAssayExperiment)
   library(tidyverse)
   
   
@@ -230,6 +232,110 @@ survival_analysis <- function(base_dir, geneExpression, mc){
   names(survival_filtering) <- names(mc)
   return(survival_filtering)
 }
+
+# DNA methylation analysis
+methylation_analysis <- function(method_="both", base_dir){
+  
+  if(method_ == "both")
+    method_ <- c("hypo", "hyper")
+  
+  if(!file.exists(paste0(getwd(), "/Data/", pr_name, "/", pr_name, "_RNA_hg19.rda"))){
+    getTCGA(disease = pr_name, genome = "hg19")  
+  } else {
+    load(paste0(getwd(), "/Data/", pr_name, "/", pr_name, "_RNA_hg19.rda"))
+    load(paste0(getwd(), "/Data/", pr_name, "/", pr_name, "_meth_hg19.rda"))
+    geneExp <- assay(rna)
+    Meth <- assay(met)
+    rm(rna, met);gc()
+  }
+  
+  
+  distal.probes <- get.feature.probe(
+    genome = "hg19", 
+    met.platform = "450K", 
+    rm.chr = paste0("chr",c("Y")) # Y는 male specific
+  )
+  
+  
+  log_save <- paste(base_dir, "ANALYSIS/ELMER", sep = "/")
+  dir.create(paste(base_dir, "ANALYSIS/ELMER", sep = "/"), showWarnings = FALSE, recursive = TRUE)
+  
+  
+  mae <- createMAE(
+    exp = geneExp, 
+    met = Meth,
+    save = TRUE,
+    linearize.exp = TRUE,
+    save.filename = paste0(log_save, "/", pr_name,"_mae.rda"),
+    filter.probes = distal.probes,
+    met.platform = "450K",
+    genome = "hg19",
+    TCGA = TRUE
+  )
+  
+  # 
+  sig.diff_list <- list()
+  nearGenes_list <- list()
+  pair_list <- list()
+  enriched.motif_list <- list()
+  TF_list <- list()
+  
+  for(method in method_){
+    sig.diff_list[[method]] <- get.diff.meth(data = mae, 
+                                             group.col = "definition",
+                                             group1 =  "Primary solid Tumor",
+                                             group2 = "Solid Tissue Normal",
+                                             minSubgroupFrac = 0.2, # if supervised mode set to 1
+                                             sig.dif = 0.3,
+                                             diff.dir = method, # Search for hypomethylated probes in group 1
+                                             cores = 14, 
+                                             dir.out = paste0(getwd(), "/", log_save), 
+                                             pvalue = 0.05)
+    
+    nearGenes_list[[method]] <- GetNearGenes(data = mae, 
+                                             probes = sig.diff_list[[method]]$probe, 
+                                             numFlankingGenes = 30)
+    
+    pair_list[[method]] <- get.pair(data = mae,
+                                    group.col = "definition",
+                                    group1 =  "Primary solid Tumor",
+                                    group2 = "Solid Tissue Normal",
+                                    nearGenes = nearGenes_list[[method]],
+                                    mode = "unsupervised",
+                                    permu.dir = paste0(getwd(), "/", log_save, "/permu"),
+                                    permu.size = 10000, # Please set to 100000 to get significant results
+                                    raw.pvalue = 0.05,   
+                                    Pe = 0.001, # Please set to 0.001 to get significant results
+                                    filter.probes = TRUE, # See preAssociationProbeFiltering function
+                                    filter.percentage = 0.05,
+                                    filter.portion = 0.3,
+                                    dir.out = log_save,
+                                    cores = 20,
+                                    label = method)
+    
+    # Mehtylation enrichiment analsis
+    enriched.motif_list[[method]] <- get.enriched.motif(data = mae,
+                                                        probes = pair_list[[method]]$Probe, 
+                                                        dir.out = paste0(getwd(), "/", log_save), 
+                                                        label = method,
+                                                        min.incidence = 10,
+                                                        lower.OR = 1.1)
+    
+    # TF analyis
+    TF_list[[method]] <- get.TFs(data = mae, 
+                                 group.col = "definition",
+                                 group1 =  "Primary solid Tumor",
+                                 group2 = "Solid Tissue Normal",
+                                 mode = "unsupervised",
+                                 enriched.motif = enriched.motif_list[[method]],
+                                 dir.out = paste0(getwd(), "/", log_save), 
+                                 cores = 1, 
+                                 label = method)
+  }
+  return(pair_list)
+}
+
+
 
 # mapping function ====
 symbol_mapping <- function(ge, col_name, platform_ann_df){

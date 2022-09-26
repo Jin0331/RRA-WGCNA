@@ -67,14 +67,13 @@ dec_two <- function(x) {
   return (format(round(x, 2), nsmall = 2));
 }
 
-ora_go_kegg <- function(gs, geneName, module_name, base_dir){
+ora_go_kegg <- function(geneName, module_name, base_dir){
   # Create directory
-  save_path <- paste0(base_dir, "ANALYSIS/GO_KEGG_ORA/", module_name, "/")
+  save_path <- paste0(base_dir, "/ANALYSIS/GO_KEGG_ORA/", module_name, "/")
   dir.create(path = save_path, showWarnings = FALSE, recursive = TRUE)
   
   # Symbol to Entrez
-  geneList <- gs
-  names(geneList) <- bitr(geneName, 
+  geneList <- bitr(geneName, 
                           fromType="ALIAS", 
                           toType = "ENTREZID",
                           OrgDb = org.Hs.eg.db, 
@@ -83,12 +82,12 @@ ora_go_kegg <- function(gs, geneName, module_name, base_dir){
     pull(2)
   
   # GO ORA - BP
-  ego_ora_bp <- enrichGO(names(geneList), 
+  ego_ora_bp <- enrichGO(geneList, 
                          OrgDb=org.Hs.eg.db, 
                          ont="BP", 
                          pAdjustMethod = "bonferroni",
-                         pvalueCutoff=0.01,
-                         qvalueCutoff=0.05,
+                         pvalueCutoff=0.9,
+                         qvalueCutoff=0.9,
                          readable=T) %>%
     mutate(., Description = paste0("(", ID ,") ", Description))
   
@@ -96,24 +95,24 @@ ora_go_kegg <- function(gs, geneName, module_name, base_dir){
                       showCategory = 20) + theme_linedraw(base_size = 30)
   
   # GO ORA CC
-  ego_ora_cc <- enrichGO(names(geneList), 
+  ego_ora_cc <- enrichGO(geneList, 
                          OrgDb=org.Hs.eg.db, 
                          ont="CC", 
                          pAdjustMethod = "bonferroni",
-                         pvalueCutoff=0.01,
-                         qvalueCutoff=0.05,
+                         pvalueCutoff=0.9,
+                         qvalueCutoff=0.9,
                          readable=T) %>%
     mutate(., Description = paste0("(", ID ,") ", Description))
   p_ora_cc <- barplot(ego_ora_cc, title = paste0("GO:Cellular Component(CC)-", module_name), 
                       showCategory = 20) + theme_linedraw(base_size = 30)
   
   # GO ORA MF
-  ego_ora_mf <- enrichGO(names(geneList), 
+  ego_ora_mf <- enrichGO(geneList, 
                          OrgDb=org.Hs.eg.db, 
                          ont="MF", 
                          pAdjustMethod = "bonferroni",
-                         pvalueCutoff=0.01,
-                         qvalueCutoff=0.05,
+                         pvalueCutoff=0.9,
+                         qvalueCutoff=0.9,
                          readable=T) %>%
     mutate(., Description = paste0("(", ID ,") ", Description))
   
@@ -123,7 +122,9 @@ ora_go_kegg <- function(gs, geneName, module_name, base_dir){
   
   
   # KEGG
-  kk <- enrichKEGG(gene = names(geneList), organism = 'hsa', pvalueCutoff = 0.05) 
+  kk <- enrichKEGG(gene = geneList, organism = 'hsa', 
+                   pvalueCutoff=0.9,
+                   qvalueCutoff=0.9) 
   p_kk <- barplot(kk, title = paste0("KEGG -", module_name), 
                   showCategory = 20) + theme_linedraw(base_size = 30)
   
@@ -191,7 +192,7 @@ survival_analysis <- function(base_dir, geneExpression, mc){
     survival_filtering <- lapply(X = names(mc), function(mc_name){
       g <- mc[[mc_name]] %>% pull(1)
       suv_exp <- geneExpression %>% rownames_to_column(var = "sample") %>% 
-        select(sample, all_of(g)) %>% 
+        dplyr::select(sample, all_of(g)) %>% 
         filter(str_ends(sample, "-01"))
       
       deg_list <- suv_exp %>% colnames() %>% .[-1]
@@ -220,7 +221,7 @@ survival_analysis <- function(base_dir, geneExpression, mc){
         
         os_list[[gene_name]] <- tibble(GENE_NAME = gene_name, 
                                        HR = hazard_ratio,
-                                       p.value = coxph_$coefficients[[5]]) 
+                                       HR.P = coxph_$coefficients[[5]]) 
       }
       
       os_list %>% bind_rows() %>% 
@@ -288,7 +289,7 @@ methylation_analysis <- function(method_="both", base_dir){
                                              minSubgroupFrac = 0.2, # if supervised mode set to 1
                                              sig.dif = 0.3,
                                              diff.dir = method, # Search for hypomethylated probes in group 1
-                                             cores = 14, 
+                                             cores = 20, 
                                              dir.out = paste0(getwd(), "/", log_save), 
                                              pvalue = 0.05)
     

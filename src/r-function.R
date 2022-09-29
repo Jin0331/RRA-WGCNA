@@ -21,6 +21,12 @@ suppressMessages({
   library(rbioapi)
   library(ELMER)
   library(MultiAssayExperiment)
+  library(parallel)
+  library(httr)
+  library(BiocParallel)
+  library(sva)
+  library(EnhancedVolcano)
+  library(RMariaDB)
   library(tidyverse)
   
   
@@ -235,105 +241,113 @@ survival_analysis <- function(base_dir, geneExpression, mc){
 }
 
 # DNA methylation analysis
-methylation_analysis <- function(method_="both", base_dir){
-  
-  if(method_ == "both")
-    method_ <- c("hypo", "hyper")
-  
-  if(!file.exists(paste0(getwd(), "/Data/", pr_name, "/", pr_name, "_RNA_hg19.rda"))){
-    getTCGA(disease = pr_name, genome = "hg19")  
-  } else {
-    load(paste0(getwd(), "/Data/", pr_name, "/", pr_name, "_RNA_hg19.rda"))
-    load(paste0(getwd(), "/Data/", pr_name, "/", pr_name, "_meth_hg19.rda"))
-    geneExp <- assay(rna)
-    Meth <- assay(met)
-    rm(rna, met);gc()
-  }
-  
-  
-  distal.probes <- get.feature.probe(
-    genome = "hg19", 
-    met.platform = "450K", 
-    rm.chr = paste0("chr",c("Y")) # Y는 male specific
-  )
-  
+methylation_analysis <- function(pr_name, method_="both", base_dir){
   
   log_save <- paste(base_dir, "ANALYSIS/ELMER", sep = "/")
   dir.create(paste(base_dir, "ANALYSIS/ELMER", sep = "/"), showWarnings = FALSE, recursive = TRUE)
   
-  
-  mae <- createMAE(
-    exp = geneExp, 
-    met = Meth,
-    save = TRUE,
-    linearize.exp = TRUE,
-    save.filename = paste0(log_save, "/", pr_name,"_mae.rda"),
-    filter.probes = distal.probes,
-    met.platform = "450K",
-    genome = "hg19",
-    TCGA = TRUE
-  )
-  
-  # 
-  sig.diff_list <- list()
-  nearGenes_list <- list()
-  pair_list <- list()
-  enriched.motif_list <- list()
-  TF_list <- list()
-  
-  for(method in method_){
-    sig.diff_list[[method]] <- get.diff.meth(data = mae, 
-                                             group.col = "definition",
-                                             group1 =  "Primary solid Tumor",
-                                             group2 = "Solid Tissue Normal",
-                                             minSubgroupFrac = 0.2, # if supervised mode set to 1
-                                             sig.dif = 0.3,
-                                             diff.dir = method, # Search for hypomethylated probes in group 1
-                                             cores = 20, 
-                                             dir.out = paste0(getwd(), "/", log_save), 
-                                             pvalue = 0.05)
+  if(file.exists(paste0(log_save, "/", pr_name, "_methylation_filtering.RData"))){
+    load(paste0(log_save, "/", pr_name, "_methylation_filtering.RData"))
     
-    nearGenes_list[[method]] <- GetNearGenes(data = mae, 
-                                             probes = sig.diff_list[[method]]$probe, 
-                                             numFlankingGenes = 30)
+  } else {
     
-    pair_list[[method]] <- get.pair(data = mae,
-                                    group.col = "definition",
-                                    group1 =  "Primary solid Tumor",
-                                    group2 = "Solid Tissue Normal",
-                                    nearGenes = nearGenes_list[[method]],
-                                    mode = "unsupervised",
-                                    permu.dir = paste0(getwd(), "/", log_save, "/permu"),
-                                    permu.size = 10000, # Please set to 100000 to get significant results
-                                    raw.pvalue = 0.05,   
-                                    Pe = 0.001, # Please set to 0.001 to get significant results
-                                    filter.probes = TRUE, # See preAssociationProbeFiltering function
-                                    filter.percentage = 0.05,
-                                    filter.portion = 0.3,
-                                    dir.out = log_save,
-                                    cores = 20,
-                                    label = method)
+    if(method_ == "both")
+      method_ <- c("hypo", "hyper")
     
-    # Mehtylation enrichiment analsis
-    enriched.motif_list[[method]] <- get.enriched.motif(data = mae,
-                                                        probes = pair_list[[method]]$Probe, 
-                                                        dir.out = paste0(getwd(), "/", log_save), 
-                                                        label = method,
-                                                        min.incidence = 10,
-                                                        lower.OR = 1.1)
+    if(!file.exists(paste0(getwd(), "/Data/", pr_name, "/", pr_name, "_RNA_hg19.rda"))){
+      getTCGA(disease = pr_name, genome = "hg19")  
+      
+    } else {
+      
+      load(paste0(getwd(), "/Data/", pr_name, "/", pr_name, "_RNA_hg19.rda"))
+      load(paste0(getwd(), "/Data/", pr_name, "/", pr_name, "_meth_hg19.rda"))
+      geneExp <- assay(rna)
+      Meth <- assay(met)
+      rm(rna, met);gc()
+    }
     
-    # TF analyis
-    TF_list[[method]] <- get.TFs(data = mae, 
-                                 group.col = "definition",
-                                 group1 =  "Primary solid Tumor",
-                                 group2 = "Solid Tissue Normal",
-                                 mode = "unsupervised",
-                                 enriched.motif = enriched.motif_list[[method]],
-                                 dir.out = paste0(getwd(), "/", log_save), 
-                                 cores = 1, 
-                                 label = method)
+    distal.probes <- get.feature.probe(
+      genome = "hg19", 
+      met.platform = "450K", 
+      rm.chr = paste0("chr",c("Y")) # Y는 male specific
+      # rm.chr = paste0('chr', c(1:6, 10:22, "X","Y"))
+    )
+    
+    mae <- createMAE(
+      exp = geneExp, 
+      met = Meth,
+      save = TRUE,
+      linearize.exp = TRUE,
+      save.filename = paste0(log_save, "/", pr_name,"_mae.rda"),
+      filter.probes = distal.probes,
+      met.platform = "450K",
+      genome = "hg19",
+      TCGA = TRUE
+    )
+    
+    sig.diff_list <- list()
+    nearGenes_list <- list()
+    methylation_filtering <- list()
+    enriched.motif_list <- list()
+    TF_list <- list()
+    
+    for(method in method_){
+      sig.diff_list[[method]] <- get.diff.meth(data = mae, 
+                                               group.col = "definition",
+                                               group1 =  "Primary solid Tumor",
+                                               group2 = "Solid Tissue Normal",
+                                               minSubgroupFrac = 0.2, # if supervised mode set to 1
+                                               sig.dif = 0.3,
+                                               diff.dir = method, # Search for hypomethylated probes in group 1
+                                               cores = 20, 
+                                               dir.out = paste0(getwd(), "/", log_save), 
+                                               pvalue = 0.05)
+      
+      nearGenes_list[[method]] <- GetNearGenes(data = mae, 
+                                               probes = sig.diff_list[[method]]$probe, 
+                                               numFlankingGenes = 30)
+      
+      methylation_filtering[[method]] <- get.pair(data = mae,
+                                                  group.col = "definition",
+                                                  group1 =  "Primary solid Tumor",
+                                                  group2 = "Solid Tissue Normal",
+                                                  nearGenes = nearGenes_list[[method]],
+                                                  mode = "unsupervised",
+                                                  permu.dir = paste0(getwd(), "/", log_save, "/permu"),
+                                                  permu.size = 10000, # Please set to 100000 to get significant results
+                                                  raw.pvalue = 0.05,   
+                                                  Pe = 0.001, # Please set to 0.001 to get significant results
+                                                  filter.probes = TRUE, # See preAssociationProbeFiltering function
+                                                  filter.percentage = 0.05,
+                                                  filter.portion = 0.3,
+                                                  dir.out = log_save,
+                                                  cores = 20,
+                                                  label = method)
+      
+      # Mehtylation enrichiment analsis
+      enriched.motif_list[[method]] <- get.enriched.motif(data = mae,
+                                                          probes = pair_list[[method]]$Probe, 
+                                                          dir.out = paste0(getwd(), "/", log_save), 
+                                                          label = method,
+                                                          min.incidence = 10,
+                                                          lower.OR = 1.1)
+      
+      # TF analyis
+      TF_list[[method]] <- get.TFs(data = mae, 
+                                   group.col = "definition",
+                                   group1 =  "Primary solid Tumor",
+                                   group2 = "Solid Tissue Normal",
+                                   mode = "unsupervised",
+                                   enriched.motif = enriched.motif_list[[method]],
+                                   dir.out = paste0(getwd(), "/", log_save), 
+                                   cores = 1, 
+                                   label = method)
+    }
+    
+    save(methylation_filtering, file = paste0(log_save, "/", pr_name, "_methylation_filtering.RData"))
   }
-  return(pair_list)
+
+  return(methylation_filtering)
 }
 
 
@@ -1486,4 +1500,254 @@ string_network <- function(hub_gene){
   ppi_network <- ppi_network %>% arrange(preferredName_A) %>% distinct_all()
   
   return(ppi_network)
+}
+
+# Filtering ----
+# DGIdb
+dgidb_interaction_parallel <- function(gene_name){
+  base_url <- "https://dgidb.org"
+  request_url <- paste0(base_url, "/api/v2/interactions.json?")
+  result_list <- list()
+  
+  # chunk id
+  id_chunk <- split(gene_name, ceiling(seq_along(gene_name)/200))
+  
+  mclapply(X = 1:length(id_chunk), FUN = function(index){
+    # print(index)
+    payload <-  list(genes = paste0(id_chunk[[index]], collapse = ","),
+                     fda_approved_drug="true")
+    
+    # output
+    dgidb_result <- POST(request_url, body = payload, encode = "form", config = httr::config(connecttimeout = 60)) %>%  
+      httr::content(encoding = "UTF-8") 
+    
+    lapply(X = dgidb_result$matchedTerms, FUN = function(dgidb_element){
+      gene_category <- dgidb_element$geneCategories %>% 
+        sapply(X = ., FUN = function(value) {value$name}) %>% 
+        paste0(collapse = ",")
+      
+      interaction <- dgidb_element$interactions %>% 
+        sapply(X = ., FUN = function(value){
+          drug_name <- value$drugName
+          score <- value$score
+          types <- value$interactionTypes %>% unlist() %>% paste0(collapse = "&")
+          
+          paste0(c(drug_name, score, types), collapse = ";") %>% 
+            as_tibble() %>% 
+            return()
+          
+          # return(drug_name)  
+        }) %>% unlist() %>% 
+        paste0(., collapse = "&")
+      
+      tibble(
+        gene = dgidb_element$geneName,
+        DGI_GENE_CATEGORY = gene_category, 
+        `DGI(DRUG_NAME;SCORE;TYPE)` = interaction,
+        DGI_COUNT = length(dgidb_element$interactions)
+      )  %>% return()
+      
+    }) %>% return()
+  }, mc.cores = 3) %>% bind_rows() %>% return()
+}
+
+# Textmining
+textmining_extract <- function(pr_name){
+  con <- DBI::dbConnect(drv = MariaDB(), host = "192.168.0.91", 
+                        port = 3306, user = "root", password = "sempre813!", dbname = "Textmining")
+  
+  tm <- tbl(con, pr_name) %>% collect()
+  
+  return(tm)  
+}
+
+# NT-TP DEA
+run_deseq_normal <- function(pr_name, base_dir, batch_removal){
+  register(MulticoreParam(20))
+  suppressMessages({
+    if((!file.exists(paste0(base_dir, "/GDCdata/", pr_name, "_normal.RData"))) | 
+       (!file.exists(paste0(base_dir, "/GDCdata/", pr_name, "_RnaseqSE_normal.RData")))){
+      query <- GDCquery(project = paste0("TCGA-", pr_name), 
+                        data.category = "Gene expression",
+                        data.type = "Gene expression quantification",
+                        experimental.strategy = "RNA-Seq",
+                        platform = "Illumina HiSeq",
+                        file.type = "results",
+                        sample.type = c("Primary Tumor", "Solid Tissue Normal"), 
+                        legacy = TRUE)
+      
+      GDCdownload(query, directory = paste0(base_dir, "/GDCdata"))
+      RnaseqSE <- GDCprepare(query)
+      
+      save(RnaseqSE, file = paste0(base_dir, "/GDCdata/", pr_name, "_RnaseqSE_normal.RData"))
+      
+      Rnaseq_CorOutliers <- assay(RnaseqSE, "raw_count") # to matrix
+      
+      # normalization of genes, # quantile filter of genes
+      dataNorm <- TCGAanalyze_Normalization(tabDF = Rnaseq_CorOutliers, geneInfo =  geneInfo)
+      dataFilt <- TCGAanalyze_Filtering(tabDF = dataNorm,
+                                        method = "quantile", 
+                                        qnt.cut =  0.25)
+      
+      save(dataFilt, file = paste0(base_dir, "/GDCdata/", pr_name, "_normal.RData"))
+    } else {
+      load(paste0(base_dir, "/GDCdata/", pr_name, "_RnaseqSE_normal.RData"))
+      load(paste0(base_dir, "/GDCdata/", pr_name, "_normal.RData"))
+    }
+    
+    
+    # selection of normal samples "NT"
+    samplesNT <- TCGAquery_SampleTypes(barcode = colnames(dataFilt), typesample = c("NT")) %>% 
+      as_tibble() %>% 
+      mutate(group = 0) %>% 
+      dplyr::rename(sample = value)
+    
+    # selection of tumor samples "TP"
+    samplesTP <- TCGAquery_SampleTypes(barcode = colnames(dataFilt), typesample = c("TP")) %>% 
+      as_tibble() %>% 
+      mutate(group = 1) %>% 
+      dplyr::rename(sample = value)
+    
+    metadata <- bind_rows(samplesNT, samplesTP) %>% 
+      mutate(group = ifelse(group == 0, "NT", "TP"))
+    metadata$group <- factor(metadata$group, levels = c("NT", "TP"))
+    
+    tcga_se <- DESeqDataSetFromMatrix(countData = dataFilt, colData = metadata, design = ~ group)
+    tcga_se$group <- relevel(tcga_se$group, ref = "NT")
+    tcga_deseq <- DESeq(tcga_se, parallel = TRUE)
+    
+    # Hidden Batch effect remove
+    if(batch_removal){
+      # hidden batch removal
+      dat <- counts(tcga_deseq, normalized=TRUE)
+      mod <- model.matrix(~ group, colData(tcga_deseq))
+      mod0 <- model.matrix(~ 1, colData(tcga_deseq))
+      
+      # run sva
+      svseq <- svaseq(dat, mod, mod0, n.sv=2)
+      tcga_se_batch <-tcga_se
+      
+      tcga_se_batch$SV1 <- svseq$sv[,1]
+      tcga_se_batch$SV2 <- svseq$sv[,2]
+      design(tcga_se_batch) <- ~ SV1 + SV2 + group
+      tcga_deseq <- DESeq(tcga_se_batch, parallel = TRUE)
+    }
+    
+    tcga_deseq_result <- results(tcga_deseq, 
+                                 alpha = 0.9999)
+    tcga_deseq_result_tidy <- results(tcga_deseq, 
+                                      alpha = 0.9999,
+                                      tidy = TRUE)
+    
+    # volcano plot
+    p <- EnhancedVolcano(tcga_deseq_result,
+                         lab = rownames(tcga_deseq_result),
+                         x = 'log2FoldChange',
+                         y = 'padj',
+                         title = 'Primary Tumor versus Solid Tissue Normal',
+                         pCutoff = 0.05,
+                         FCcutoff = 1.5,
+                         pointSize = 3.0,
+                         labSize = 6.0)
+    
+    ggsave(plot = p, filename = paste0(base_dir, "/GDCdata/", pr_name, "_volcano/", pr_name, "_DESEQ2_normal_volcano.png"), height = 8, width = 12, dpi = 70)    
+  })  
+  
+  return(tcga_deseq_result_tidy)
+}
+
+# protein atlas
+protein_atlas <- function(gene_name){
+  suppressMessages({
+    protein_atlas_url <- "https://www.proteinatlas.org/"
+    gene_list_mapping <- mapIds(org.Hs.eg.db,
+                                keys=gene_name, 
+                                column="ENSEMBL",
+                                keytype="SYMBOL",
+                                multiVals="first") %>% 
+      tibble(gene = names(.), ENSEMBL = .) %>% 
+      mutate(PROTEIN_ATLAS = ifelse(!is.na(ENSEMBL), paste0(protein_atlas_url, ENSEMBL, "-", gene), "")) %>% 
+      dplyr::select(gene, PROTEIN_ATLAS)
+  })
+  return(gene_list_mapping)
+}
+
+further_analysis <- function(mc, ge, key_hub_gene, base_dir){
+  # STRING analysis
+  string_filtering <- string_analysis(mc, base_dir) %>% 
+    lapply(X = ., FUN = function(df){
+      df %>% mutate(STRING = TRUE)
+    }) %>% bind_rows()
+  
+  # Survival analysis
+  survival_filtering <- survival_analysis(base_dir = base_dir, 
+                                          geneExpression = ge, 
+                                          mc = mc) %>% 
+    bind_rows()
+  
+  # DNA metylation analysis
+  methylation_filtering <- methylation_analysis(pr_name = pr_name, base_dir = base_dir)
+  methylation_filtering_ <- lapply(X = names(methylation_filtering), FUN = function(method){
+    GENE_NAME <- methylation_filtering[[method]]$Symbol
+    P.adjust <- methylation_filtering[[method]]$Pe
+    
+    tmp_df <- tibble(GENE_NAME = GENE_NAME, Methylated = method, P.adjust = P.adjust) %>% 
+      distinct(GENE_NAME, .keep_all = TRUE)
+    colnames(tmp_df) <- c("GENE_NAME", paste0('Methylated_', method),
+                          paste0('P.adjust_', method))
+    return(tmp_df)
+  })
+  names(methylation_filtering_) <- names(methylation_filtering)
+  
+  # analysis merge
+  module_candidate_analysis <- mc %>% bind_rows() %>% 
+    left_join(x = ., y = key_hub_gene$intra_module_gene %>% bind_rows(), by = c("GENE_NAME" = "gene")) %>% 
+    left_join(x = ., y = string_filtering, by = c("GENE_NAME", "TRAIT", "MODULE")) %>% 
+    left_join(x = ., y = survival_filtering, by = c("GENE_NAME", "TRAIT", "MODULE")) %>% 
+    left_join(x = ., y = methylation_filtering_$hypo, by = "GENE_NAME") %>% 
+    left_join(x = ., y = methylation_filtering_$hyper, by = "GENE_NAME") %>% 
+    unite(Methylated, Methylated_hypo, Methylated_hyper, sep = "/", na.rm = TRUE) %>% 
+    unite(Methylated.Padj, P.adjust_hypo, P.adjust_hyper, sep = "/", na.rm = TRUE) %>% 
+    rename(GENE_SIGNIFICANCE = GS)
+  
+  # Enrichment analysis
+  lapply(X = names(mc), FUN = function(module_name){
+    ora_go_kegg(geneName = mc[[module_name]]$GENE_NAME,
+                module_name = module_name,
+                base_dir = base_dir)
+  })
+  
+  return(module_candidate_analysis)
+}
+
+filtering_combine <- function(pr_name, mc){
+  # filtering merge
+  # nt_tp <- run_deseq_normal(pr_name = pr_name, base_dir = base_dir, batch_removal = FALSE) %>% 
+  #   select('row', 'log2FoldChange', 'pvalue')
+  # colnames(nt_tp) <- c('gene', 'NT-TP_Log2FC', 'NT-TP.Padj')
+  tm <- textmining_extract(pr_name = pr_name)
+  colnames(tm) <- c('gene', 'TM.type', 'TM.Support', 'TM.Confidence', 'TM.Lift', 'TM.Count')
+  
+  dgi <- dgidb_interaction_parallel(mc$GENE_NAME)
+  colnames(dgi) <- c('gene', 'DGI.Gene Category', 'DGI.DrugName;Score;Type', 'DGI.Count')
+  
+  pdb <- symbol2pdb(mc$GENE_NAME)
+  colnames(pdb) <- c('gene', 'PDB.Id', 'PDB.Count')
+  
+  oncokb <- oncokb_allcuratedGenes()
+  colnames(oncokb) <- c('gene', 'OncoKB.Is Oncogene', 'OncoKB.Is TSG', 
+                        'OncoKB.Highest Level of Evidence(sensitivity)',
+                        'OncoKB.Highest Level of Evidence(resistance)',
+                        'OncoKB.Background')
+  
+  protein <- protein_atlas(gene_name = mc$GENE_NAME)
+  
+  mc %>% 
+    # left_join(x = ., y = nt_tp, by = c('GENE_NAME' = 'gene')) %>% 
+    left_join(x = ., y = tm, by = c('GENE_NAME' = 'gene')) %>% 
+    left_join(x = ., y = dgi, by = c('GENE_NAME' = 'gene')) %>% 
+    left_join(x = ., y = pdb, by = c('GENE_NAME' = 'gene')) %>% 
+    left_join(x = ., y = oncokb, by = c('GENE_NAME' = 'gene')) %>% 
+    left_join(x = ., y = protein, by = c('GENE_NAME' = 'gene')) %>% 
+    return()
 }

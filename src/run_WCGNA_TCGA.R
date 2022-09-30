@@ -25,7 +25,7 @@ MEs <- orderMEs(MEs0)
 # find key hub gene
 key_hub_gene <- find_key_modulegene(pr_name = pr_name, base_dir = base_dir,
                                     network = network, MEs = MEs, 
-                                    select_clinical = c("hist_hepato_carc_fact"),
+                                    select_clinical = NULL,
                                     mm = 0.85, gs = 0.2)
 
 save(key_hub_gene, file = paste0(base_dir, "/Step3_KEY_HUB_GENE.RData"))

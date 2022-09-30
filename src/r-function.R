@@ -1237,7 +1237,10 @@ find_key_modulegene <- function(pr_name, base_dir, network, MEs, select_clinical
   module_cluster_plot(network = network, save_path = log_save)
   module_trait_plot(moduleTraitCor = moduleTraitCor, moduleTraitPvalue = moduleTraitPvalue,
                     data_trait = data_trait, MEs = MEs, save_path = log_save)
-  gene_module_size_plot(gene_module_key_groph = intra_module_size, save_path = log_save)
+  gene_module_size_plot(gene_module_key_groph = intra_module_size, 
+                        title = "After Intra Module analysis(MM-GS cut-off), Module Size",
+                        prefix = "Step3_module_size",
+                        save_path = log_save)
   # key_hub_intersection_plot(total_keyhub = total_keyhub_merge, save_path = log_save)
 
   
@@ -1303,19 +1306,21 @@ module_trait_plot <- function(moduleTraitCor, moduleTraitPvalue, data_trait, MEs
                  main = paste("Module-trait relationships"))
   dev.off()
 }
-gene_module_size_plot <- function(gene_module_key_groph, save_path){
+gene_module_size_plot <- function(gene_module_key_groph, title, prefix, save_path){
   p <- ggpubr::ggbarplot(gene_module_key_groph, x = "module", y = "module_size",
                          color = "module",
                          fill = "module",
                          sort.val = "asc",
-                         sort.by.groups = FALSE,
+                         sort.by.groups = FALSE, 
                          x.text.angle = 90,          # Rotate vertically x axis texts
-                         title = "After Intra Module analysis(MM-GS), Module Size",
+                         title = title,
                          ylab = "Module Size",
                          legend.title = "Module",
                          rotate = TRUE,
-                         ggtheme = theme_minimal())
-  ggsave(p, filename = paste0(save_path, "/Step3_top3_modulesize.png"))
+                         label = TRUE, lab.pos = "in", lab.col = "black",
+                         ggtheme = theme_minimal()) + theme(legend.position="none")
+  ggsave(p, filename = paste0(save_path, "/", prefix, ".png"), 
+         width = 8, height = 8)
   return(p)
 }
 key_hub_intersection_plot <- function(total_keyhub, save_path){
@@ -1744,7 +1749,7 @@ filtering_combine <- function(pr_name, mc){
   
   mc %>% 
     # left_join(x = ., y = nt_tp, by = c('GENE_NAME' = 'gene')) %>% 
-    left_join(x = ., y = tm, by = c('GENE_NAME' = 'gene')) %>% 
+    left_join(x = ., y = tm %>% select(-`TM.type`), by = c('GENE_NAME' = 'gene')) %>% 
     left_join(x = ., y = dgi, by = c('GENE_NAME' = 'gene')) %>% 
     left_join(x = ., y = pdb, by = c('GENE_NAME' = 'gene')) %>% 
     left_join(x = ., y = oncokb, by = c('GENE_NAME' = 'gene')) %>% 

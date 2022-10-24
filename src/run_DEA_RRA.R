@@ -2,8 +2,8 @@
 source("src/r-function.R")
 
 # ======= RUN DEA & RRA ======= 
-# save
-multiple_limma <- GSE_manual()
+gse_list <- c("GSE76427", "GSE54236", "GSE39791","GSE14811", "GSE87630", "GSE136247", "GSE64041", "GSE45114")
+multiple_limma <- GSE_manual(gse_list = gse_list)
 save(multiple_limma, file = paste0(base_dir, "/Step2_RAW.RData"))
 
 # rra & robust DEGs

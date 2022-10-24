@@ -413,19 +413,16 @@ biodbnet_db2db <- function(id){
 
 
 # GEO download function  ====
-GSE_manual <- function(pheno_edit = TRUE){
+GSE_manual <- function(gse_list, pheno_edit = TRUE){
   # now_date <- Sys.time() %>% str_split(pattern = " ") %>% unlist() %>% .[1]
   dir.create(paste0(base_dir, "/DEA"), recursive = TRUE, showWarnings = FALSE)
   multiple_limma <- list()
+  
   tryCatch(
     expr = {
-      q <- 1
-      while(q != 0){
-        q <- readline('quit -> 0 : ')
-        if(q == 0) break
-        
-        gse_name <- readline('enter GSE assesion : ')
-        
+      
+      for(gse_name in gse_list){
+        print(gse_name)
         if(file.exists(paste0(base_dir, "/DEA/", gse_name, "_limma.txt"))){
           multiple_limma[[gse_name]] <- read_delim(paste0(base_dir, "/DEA/", gse_name, "_limma.txt"), delim = "\t",
                                                    show_col_types = FALSE)

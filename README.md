@@ -2,7 +2,8 @@
 
 * **Environment**
 
-```conda create -n geo-py python=3.8
+```
+conda create -n geo-py python=3.8
 conda activate geo-py
 pip install -r env/requirements.txt --user
 ```

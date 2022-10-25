@@ -2,7 +2,10 @@
 
 * **Environment**
 
-  ```conda env create --file env/geo_py.yaml```
+```conda create -n geo-py python=3.8
+conda activate geo-py
+pip install -r env/requirements.txt --user
+```
 
 * **Function**
 

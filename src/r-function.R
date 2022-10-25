@@ -30,7 +30,7 @@ suppressMessages({
   library(tidyverse)
   
   
-  use_condaenv(condaenv = "/home/wmbio/anaconda3/envs/geo-py")
+  use_condaenv(condaenv = "geo-py")
   source_python("src/py-function.py")
 })
 

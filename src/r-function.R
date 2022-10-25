@@ -30,7 +30,7 @@ suppressMessages({
   library(tidyverse)
   
   
-  use_condaenv(condaenv = "geo-py")
+  use_condaenv(condaenv = "/home/wmbio/anaconda3/envs/geo-py")
   source_python("src/py-function.py")
 })
 
@@ -531,7 +531,7 @@ GSE_manual <- function(gse_list, pheno_edit = TRUE){
           
           # selected pheno
           grp <- pheno %>% 
-            select(starts_with(selected_pheno)) %>% 
+            dplyr::select(starts_with(selected_pheno)) %>% 
             pull(1) %>% 
             # filter(str_detect(`source_name_ch1`, "HCC")) %>%
             lapply(X = ., FUN = tolower) %>% 

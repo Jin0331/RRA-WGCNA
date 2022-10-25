@@ -1,9 +1,7 @@
-# BiocManager::install("GEOmetadb", force = TRUE)
 library(GEOmetadb)
 library(tidyverse)
 library(reshape2)
 
-# geometadbfile <- getSQLiteFile()
 con <- dbConnect(SQLite(), "RAW_DATA/GEOmetadb.sqlite") # 0607 version
 geo_tables <- dbListTables(con)
 
@@ -22,9 +20,7 @@ gpl_count <- tbl(con, "gse_gpl") %>%
 gpl <- tbl(con, "gse_gpl") %>% 
   collect() 
 
-gpl_id <- lapply(X = gpl %>% 
-         pull(gse) %>% 
-         unique(),
+gpl_id <- lapply(X = gpl %>%  pull(gse) %>% unique(),
        FUN = function(value){
          tmp <- gpl %>% filter(gse == value)
          return(tmp %>% pull(gpl) %>% paste0(collapse = ";"))
@@ -38,6 +34,7 @@ query <- paste("SELECT gse, title, summary, type, pubmed_id FROM gse",
                "AND type = 'Expression profiling by array'",
                "AND gse IN (SELECT DISTINCT series_id FROM gsm WHERE organism_ch1 == 'Homo sapiens')",
                sep = " ")
+
 rs <- dbGetQuery(conn = con, statement = query) %>% 
   as_tibble()
 

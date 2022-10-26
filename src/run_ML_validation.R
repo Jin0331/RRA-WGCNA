@@ -19,8 +19,9 @@ for(m_name in names(key_hub_gene$intra_module)){
   selected_gene <- gene_selection(base_dir = base_dir,
                                   total_keyhub_list = total_keyhub, 
                                   over_sampling = TRUE) %>% compact()
+  
   final_candidate_gene <- ml_validation(base_dir = base_dir, selected_gene = selected_gene,
-                                        over_sampling=TRUE, cv = TRUE, module_name = m_name) %>% 
+                                        over_sampling=TRUE, cv = FALSE, module_name = m_name) %>% 
     auc_cutoff(sg_list = ., selected_gene = selected_gene, auc_cutoff = 0.7)
   
   # final write

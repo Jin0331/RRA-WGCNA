@@ -1,38 +1,40 @@
 # library ----
 suppressMessages({
-  library(GEOquery)
-  library(limma)
-  library(RobustRankAggreg)
-  library(pheatmap)
-  library(DESeq2)
-  library(impute)
-  library(TCGAbiolinks)
-  library(reticulate)
-  library(ggVennDiagram)
-  library(WGCNA)
-  library(CorLevelPlot)
-  library(caret)
-  library(DataEditR)
-  library(clusterProfiler)
-  library(enrichplot)
-  library(org.Hs.eg.db)
-  library(survival)
-  library(survminer)
-  library(rbioapi)
-  library(ELMER)
-  library(MultiAssayExperiment)
-  library(parallel)
-  library(httr)
-  library(BiocParallel)
-  library(sva)
-  library(EnhancedVolcano)
-  library(RMariaDB)
-  library(tidyverse)
+  # Bioconductor
+  library(GEOquery) # bio
+  library(limma) # bio
+  library(DESeq2) # bio
+  library(impute) #bio
+  library(TCGAbiolinks) # bio
+  library(WGCNA) # bio
+  library(clusterProfiler) # bio
+  library(enrichplot) # bio
+  library(org.Hs.eg.db) # bio
+  library(BiocParallel) # bio
+  library(sva) # bio
+  library(MultiAssayExperiment) # bio
   
+  # Github
+  library(ggVennDiagram) #github 
+  library(CorLevelPlot) # github
+  library(ELMER) # bio
   
-  use_condaenv(condaenv = "geo-py")
-  source_python("src/py-function.py")
+  # CRAN
+  library(RobustRankAggreg) # cran
+  library(pheatmap) # cran
+  library(reticulate) # cran
+  library(survival) # cran
+  library(survminer) # cran
+  library(rbioapi) # cran
+  library(parallel) # base
+  library(httr) # base
+  library(RMariaDB) # cran
+  library(tidyverse) # cran
+  
+  source_python("/home/rstudio//RRA-WGCNA/src/py-function.py")
+  use_python(python = "/opt/anaconda3/bin/python3")
 })
+
 
 # global variable ----
 time_stamp <- Sys.time() %>% str_split(pattern = " ") %>% 
@@ -80,10 +82,10 @@ ora_go_kegg <- function(geneName, module_name, base_dir){
   
   # Symbol to Entrez
   geneList <- bitr(geneName, 
-                          fromType="ALIAS", 
-                          toType = "ENTREZID",
-                          OrgDb = org.Hs.eg.db, 
-                          drop = FALSE) %>% 
+                   fromType="ALIAS", 
+                   toType = "ENTREZID",
+                   OrgDb = org.Hs.eg.db, 
+                   drop = FALSE) %>% 
     distinct(ALIAS, .keep_all = TRUE) %>% 
     pull(2)
   
@@ -235,7 +237,7 @@ survival_analysis <- function(base_dir, geneExpression, mc){
         return()
     })
   })
-
+  
   names(survival_filtering) <- names(mc)
   return(survival_filtering)
 }
@@ -346,7 +348,7 @@ methylation_analysis <- function(pr_name, method_="both", base_dir){
     
     save(methylation_filtering, file = paste0(log_save, "/", pr_name, "_methylation_filtering.RData"))
   }
-
+  
   return(methylation_filtering)
 }
 
@@ -559,8 +561,8 @@ GSE_manual <- function(gse_list, pheno_edit = TRUE){
       return(multiple_limma)
     }
   )
-
-
+  
+  
   return(multiple_limma)
 }
 
@@ -743,7 +745,7 @@ getGeneExpressionFromGEO <- function(datasetGeoCode, retrieveGeneSymbols, verbos
         
         if (verbose == TRUE)    
           cat("\n[start] loop for the association of the gene symbols to the probeset ID's\n", sep="")
-
+        
         if(thisGEOplatform %in% platformsWithGENEField)
           thisSymbol <- symbol_mapping(ge = gene_expression, col_name = "GENE", platform_ann_df = platform_ann_df)
         if(thisGEOplatform %in% platformsWithGeneSpaceSymbolField)
@@ -836,7 +838,7 @@ rra_extract <- function(ml, logfc = 0.0, fdr = 0.05){
   #       dplyr::pull(rowname) %>%
   #       return()
   #   }) 
-
+  
   # up-regulated  
   up_degs <- names(ml) %>%
     lapply(X = ., FUN = function(list_name){
@@ -902,14 +904,14 @@ rra_analysis <- function(m_list, logfc = 0, fdr = 0.05, save_path = getwd()){
   colnames(combine_degs_m) <- colnames(up_down_rra_gene)[2:length(colnames(up_down_rra_gene))]
   
   p <- pheatmap(combine_degs_m, 
-           display_numbers = TRUE,
-           number_color = "black",
-           fontsize_number = 10,
-           border_color = "black",
-           cluster_rows = F,
-           cluster_cols = F,
-           cellwidth = 35,
-           cellheight = 10
+                display_numbers = TRUE,
+                number_color = "black",
+                fontsize_number = 10,
+                border_color = "black",
+                cluster_rows = F,
+                cluster_cols = F,
+                cellwidth = 35,
+                cellheight = 10
   )
   save_pheatmap(p, filename = paste0(save_path, "/Step2_merge_DEA.png"))
   
@@ -1042,7 +1044,7 @@ network_preprocessing <- function(pr_name, robustdegs, mch = 0.25, time_stamp){
                             verbose = 0)
     
   })
-    
+  
   
   return(list(deg = robustdeg_ge, network = net))
 }
@@ -1070,8 +1072,8 @@ find_key_modulegene <- function(pr_name, base_dir, network, MEs, select_clinical
   #   select(sampleID, Subtype_Integrative)
   
   clinical_trait <- left_join(x = clinical_trait, y = survival_trait, by = c("sampleID" = "sample"))
-    # left_join(x = ., y = immune_trait, by = c("sampleID" = "sample")) %>% 
-    # left_join(x = ., y = molecular_trait, by = "sampleID")
+  # left_join(x = ., y = immune_trait, by = c("sampleID" = "sample")) %>% 
+  # left_join(x = ., y = molecular_trait, by = "sampleID")
   
   default_clinical <- c('sample_type', 
                         # 'Subtype_Immune_Model_Based', 'Subtype_Integrative',
@@ -1109,7 +1111,7 @@ find_key_modulegene <- function(pr_name, base_dir, network, MEs, select_clinical
       data_trait[[col_name]] <- ifelse(data_trait[[col_name]] %in% remove_trait, 0, data_trait[[col_name]]) 
     }
   }
-
+  
   # binary to category
   if(binarytocategory){
     # category to binary
@@ -1184,7 +1186,7 @@ find_key_modulegene <- function(pr_name, base_dir, network, MEs, select_clinical
         filter(gene %in% module_MM_gene, abs(GS) > gs) %>% 
         arrange(desc(abs(GS)))
       
-      })
+    })
     names(module_MM_GS_filtered) <- data_trait %>% colnames()
     
     return(module_MM_GS_filtered)
@@ -1239,7 +1241,7 @@ find_key_modulegene <- function(pr_name, base_dir, network, MEs, select_clinical
                         prefix = "Step3_module_size",
                         save_path = log_save)
   # key_hub_intersection_plot(total_keyhub = total_keyhub_merge, save_path = log_save)
-
+  
   
   
   # return(list(total_keyhub = total_keyhub, clinical_trait = data_trait, total_keyhub_merge = total_keyhub_merge, network = network))

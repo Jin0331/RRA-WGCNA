@@ -11,8 +11,7 @@ mch_test <- purrr::quietly(mergecutheight_test)(pr_name = pr_name, robustdegs = 
 mch_test_value <- mch_test$result$max_mch
 
 network <- network_preprocessing(pr_name = pr_name, robustdegs = robustdegs, 
-                                 mch = mch_test_value,
-                                 time_stamp = time_stamp)
+                                 mch = mch_test_value, time_stamp = time_stamp)
 
 # network variable
 moduleLabels <- network[[2]]$colors

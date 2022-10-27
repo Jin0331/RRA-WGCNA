@@ -1,4 +1,5 @@
 # function
+setwd("~/RRA-WGCNA/")
 source("src/r-function.R")
 
 # ======= RUN DEA & RRA ======= 

@@ -1,3 +1,5 @@
+setwd("~/RRA-WGCNA/")
+
 library(GEOmetadb)
 library(tidyverse)
 library(reshape2)

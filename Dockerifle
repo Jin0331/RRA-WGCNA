@@ -47,8 +47,7 @@ RUN Rscript -e 'BiocManager::install("BioinformaticsFMRP/TCGAbiolinks");devtools
 # python install
 RUN apt update && apt install software-properties-common -y
 RUN add-apt-repository ppa:deadsnakes/ppa && apt install python3.8 -y
-RUN ln -s /usr/bin/pip3 /usr/bin/pip && \
-    ln -s /usr/bin/python3.8 /usr/bin/python
+RUN ln -s /usr/bin/pip3 /usr/bin/pip
     
 # python
 RUN apt-get clean all && \

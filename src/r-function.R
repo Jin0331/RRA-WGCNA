@@ -22,17 +22,21 @@ suppressMessages({
   # CRAN
   library(RobustRankAggreg) # cran
   library(pheatmap) # cran
-  library(reticulate) # cran
   library(survival) # cran
   library(survminer) # cran
   library(rbioapi) # cran
   library(parallel) # base
   library(httr) # base
   library(RMariaDB) # cran
+  library(glmnet)
   library(tidyverse) # cran
+  library(reticulate)
   
-  use_python_version("/usr/bin/python3")
-  source_python("/home/rstudio//RRA-WGCNA/src/py-function.py")
+  source_python("src/py-function.py")
+  use_python("/usr/bin/python3")  
+  # reticulate::use_condaenv("geo-py")
+  # reticulate::use_python("/usr/bin/python3")  
+  # reticulate::source_python("src/py-function.py")
 })
 
 
@@ -1379,7 +1383,7 @@ gene_selection <- function(base_dir, total_keyhub_list, over_sampling){
       next
     
     # gene selection
-    lasso_coef <- feature_selection_LASSO(x_df, y_df, over_sampling)
+    lasso_coef <- feature_selection_LASSO(x_df, y_df, over_sampling) # Invoke python ########## 실행시 crash 발생함
     lasso_selection_gene <- x_df %>% select(which(abs(lasso_coef) > 0)) %>% colnames()
     
     gene_selection_list[[trait_name]] <- lasso_selection_gene

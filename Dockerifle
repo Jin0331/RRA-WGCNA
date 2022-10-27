@@ -1,4 +1,4 @@
-FROM rocker/r-ver:4.1.3
+FROM rocker/r-ver:4.0.5
 
 LABEL org.opencontainers.image.licenses="GPL-2.0-or-later" \
       org.opencontainers.image.source="https://github.com/rocker-org/rocker-versioned2" \
@@ -29,12 +29,36 @@ RUN apt-get clean all && \
     liblzma-dev \
     libglpk40 \
     libgit2-28 \
+    libx11-dev \
     libcairo2-dev \
     libxt-dev \
     libmysqlclient-dev \
   && apt-get clean all && \
   apt-get purge && \
   rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+# Rpackage
+RUN Rscript -e "install.packages(c('tidyverse','reticulate','BiocManager', 'processx','devtools', 'R.methodsS3'))"
+RUN Rscript -e "cran <- c('Cairo','RobustRankAggreg', 'pheatmap', 'survival', 'survminer', 'rbioapi', 'RMariaDB');install.packages(cran);"
+RUN Rscript -e "bioc <- c('GEOquery', 'limma', 'DESeq2', 'impute', 'WGCNA', 'Gviz', 'sva', 'modelr', 'clusterProfiler', 'ggVennDiagram','enrichplot', 'org.Hs.eg.db', 'MultiAssayExperiment', 'BiocParallel');BiocManager::install(bioc)"
+RUN Rscript -e 'devtools::install_github("gaospecial/ggVennDiagram");devtools::install_github("kevinblighe/CorLevelPlot");BiocManager::install("BioinformaticsFMRP/TCGAbiolinksGUI.data")'
+RUN Rscript -e 'BiocManager::install("BioinformaticsFMRP/TCGAbiolinks");devtools::install_github("tiagochst/ELMER.data");devtools::install_github("tiagochst/ELMER")'
+
+# python install
+RUN apt update && apt install software-properties-common -y
+RUN add-apt-repository ppa:deadsnakes/ppa && apt install python3.8 -y
+RUN ln -s /usr/bin/pip3 /usr/bin/pip && \
+    ln -s /usr/bin/python3.8 /usr/bin/python
+    
+# python
+RUN apt-get clean all && \
+  apt-get update && \
+  apt-get upgrade -y && \
+  apt-get install -y \
+    python3-pip
+COPY env env
+RUN pip install -r env/requirements.txt
+
  
 WORKDIR /home/rstudio
 
@@ -48,28 +72,24 @@ COPY RAW_DATA RRA-WGCNA/RAW_DATA
 COPY WGCNA_PIPELINE_RESULT RRA-WGCNA/WGCNA_PIPELINE_RESULT
 RUN chmod -R 777 RRA-WGCNA
 
-# Install python Anaconda env
-ENV ANACONDA_PATH="/opt/anaconda3"
-ENV PATH=${ANACONDA_PATH}/bin:${PATH}
-ENV ANACONDA_INSTALLER=Anaconda3-2020.07-Linux-x86_64.sh
-RUN mkdir ${ANACONDA_PATH} \
-    && chown -R ${DEFAULT_USER}:${DEFAULT_USER} ${ANACONDA_PATH}
-RUN apt-get install -y wget
-RUN wget https://repo.anaconda.com/archive/${ANACONDA_INSTALLER} \
-    && /bin/bash ${ANACONDA_INSTALLER} -b -u -p ${ANACONDA_PATH} \
-    && chown -R ${DEFAULT_USER} ${ANACONDA_PATH} \
-    && rm -rvf ~/${ANACONDA_INSTALLER}.sh \
-    && echo ". ${ANACONDA_PATH}/etc/profile.d/conda.sh" >> ~/.bashrc \
-    && echo "conda activate base" >> ~/.bashrc \
-    && pip install -r RRA-WGCNA/env/requirements.txt
 
-# Rpackage
-RUN Rscript -e "install.packages(c('tidyverse', 'BiocManager', 'processx','devtools', install.packages('R.methodsS3')))"
-RUN Rscript -e "BiocManager::install(version = '3.12')"
-RUN Rscript -e "cran <- c('Cairo','RobustRankAggreg', 'pheatmap', 'reticulate', 'survival', 'survminer', 'rbioapi', 'RMariaDB');install.packages(cran);"
-RUN Rscript -e "bioc <- c('GEOquery', 'limma', 'DESeq2', 'impute', 'WGCNA', 'Gviz', 'sva', 'modelr', 'clusterProfiler', 'ggVennDiagram','enrichplot', 'org.Hs.eg.db', 'MultiAssayExperiment', 'BiocParallel');BiocManager::install(bioc)"
-RUN Rscript -e 'devtools::install_github("gaospecial/ggVennDiagram");devtools::install_github("kevinblighe/CorLevelPlot");BiocManager::install("BioinformaticsFMRP/TCGAbiolinksGUI.data")'
-RUN Rscript -e 'BiocManager::install("BioinformaticsFMRP/TCGAbiolinks");devtools::install_github("tiagochst/ELMER.data");devtools::install_github("tiagochst/ELMER")'
+
+# # Install python Anaconda env
+# ENV ANACONDA_PATH="/opt/anaconda3"
+# ENV PATH=${ANACONDA_PATH}/bin:${PATH}
+# ENV ANACONDA_INSTALLER=Anaconda3-2020.07-Linux-x86_64.sh
+# RUN mkdir ${ANACONDA_PATH} \
+#     && chown -R ${DEFAULT_USER}:${DEFAULT_USER} ${ANACONDA_PATH}
+# RUN apt-get install -y wget
+# RUN wget https://repo.anaconda.com/archive/${ANACONDA_INSTALLER} \
+#     && /bin/bash ${ANACONDA_INSTALLER} -b -u -p ${ANACONDA_PATH} \
+#     && chown -R ${DEFAULT_USER} ${ANACONDA_PATH} \
+#     && rm -rvf ~/${ANACONDA_INSTALLER}.sh \
+#     && echo ". ${ANACONDA_PATH}/etc/profile.d/conda.sh" >> ~/.bashrc \
+#     && echo "conda activate base" >> ~/.bashrc \
+#     && pip install -r RRA-WGCNA/env/requirements.txt
+
 
 EXPOSE 8787
+
 CMD ["/init"]

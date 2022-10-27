@@ -31,8 +31,8 @@ suppressMessages({
   library(RMariaDB) # cran
   library(tidyverse) # cran
   
+  use_python_version("/usr/bin/python3")
   source_python("/home/rstudio//RRA-WGCNA/src/py-function.py")
-  use_python(python = "/opt/anaconda3/bin/python3")
 })
 
 

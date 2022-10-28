@@ -20,6 +20,7 @@ suppressMessages({
   library(ELMER) # bio
   
   # CRAN
+  library(glue)
   library(RobustRankAggreg) # cran
   library(pheatmap) # cran
   library(survival) # cran
@@ -29,14 +30,11 @@ suppressMessages({
   library(httr) # base
   library(RMariaDB) # cran
   library(glmnet)
-  library(tidyverse) # cran
   library(reticulate)
+  library(tidyverse) # cran
   
   source_python("src/py-function.py")
   use_python("/usr/bin/python3")  
-  # reticulate::use_condaenv("geo-py")
-  # reticulate::use_python("/usr/bin/python3")  
-  # reticulate::source_python("src/py-function.py")
 })
 
 
@@ -172,17 +170,27 @@ string_analysis <- function(mc, base_dir, score = 400){
                                species = 9606,
                                save_image = paste0(getwd(),
                                                    "/", base_dir, "/ANALYSIS/STRING/", mc_name, "-PPI.png"),
-                               required_score = 400,
+                               required_score = score,
                                network_flavor = "confidence", 
                                hide_disconnected_nodes = TRUE)
       
+      ee <- FALSE
+      tryCatch(
+        expr = {
+          string_filtered_g <- c(int_net$preferredName_A, int_net$preferredName_B) %>% 
+            unique() %>% 
+            tibble(GENE_NAME = .) %>% 
+            inner_join(x = g, y = ., by = "GENE_NAME")
+        }, 
+        error = {
+          function(e){
+            ee <<- TRUE
+          }})
       
-      string_filtered_g <- c(int_net$preferredName_A, int_net$preferredName_B) %>% 
-        unique() %>% 
-        tibble(GENE_NAME = .) %>% 
-        inner_join(x = g, y = ., by = "GENE_NAME")
-      
-      return(string_filtered_g)
+      if(ee)
+        return(NULL)
+      else
+        return(string_filtered_g)
     })  
   })
   
@@ -275,7 +283,7 @@ methylation_analysis <- function(pr_name, method_="both", base_dir){
     distal.probes <- get.feature.probe(
       genome = "hg19", 
       met.platform = "450K", 
-      rm.chr = paste0("chr",c("Y")) # Y는 male specific
+      # rm.chr = paste0("chr",c("Y")) # Y는 male specific
       # rm.chr = paste0('chr', c(1:6, 10:22, "X","Y"))
     )
     
@@ -1367,23 +1375,30 @@ gene_selection <- function(base_dir, total_keyhub_list, over_sampling){
   for(trait_name in trait_names){
     Y_col_name <- trait_name
     DF <- clinical_trait %>% 
-      select(all_of(Y_col_name)) %>%
+      dplyr::select(all_of(Y_col_name)) %>%
       rownames_to_column(var = "sample") %>% 
       inner_join(x = ., y = geneExpression %>% 
                    rownames_to_column(var = "sample") %>% 
-                   select(sample, all_of(total_keyhub_list[[Y_col_name]]$gene)),
+                   dplyr::select(sample, all_of(total_keyhub_list[[Y_col_name]]$gene)),
                  by = "sample") %>% 
       column_to_rownames(var = "sample")
-    
-    # X, y 분리
     y_df <- DF %>% select(-all_of(total_keyhub_list[[Y_col_name]]$gene))
     x_df <- DF %>% select_at(all_of(total_keyhub_list[[Y_col_name]]$gene))
-    
-    if(ncol(x_df) <= 1)
+    if(ncol(x_df) <= 1){
       next
+    }
     
     # gene selection
-    lasso_coef <- feature_selection_LASSO(x_df, y_df, over_sampling) # Invoke python ########## 실행시 crash 발생함
+    write_csv(x_df, file = paste0(log_save, "x_df_temp.csv"))
+    write_csv(y_df, file = paste0(log_save, "y_df_temp.csv"))
+    
+    system(glue("python3 src/py-lasso.py -b {base_dir} -x {x_path} -y {y_path} -o True", 
+                base_dir = log_save,
+                x_path = paste0(log_save, "x_df_temp.csv"), 
+                y_path = paste0(log_save, "y_df_temp.csv"))
+           )
+    lasso_coef <- read_csv(file = paste0(log_save, "/lasso_result.csv"), show_col_types = FALSE) %>% pull(coef)
+    # lasso_coef <- feature_selection_LASSO(x_df, y_df, over_sampling) # Invoke python ########## 실행시 crash 발생함
     lasso_selection_gene <- x_df %>% select(which(abs(lasso_coef) > 0)) %>% colnames()
     
     gene_selection_list[[trait_name]] <- lasso_selection_gene
@@ -1414,11 +1429,33 @@ ml_validation <- function(base_dir, selected_gene, over_sampling, cv, module_nam
                    select(sample, all_of(selected_gene[[Y_col_name]])),
                  by = "sample") %>% 
       column_to_rownames(var = "sample")
+    
+    write_csv(DF, file = paste0(log_save, "df_temp.csv"))
+    
+    
     # gene selection
     if(!cv){
-      roc_auc_list[[trait_name]] <- roc_acu_calculator(DF, Y_col_name, log_save, over_sampling = over_sampling, module_name = module_name)
+      # roc_auc_list[[trait_name]] <- roc_acu_calculator(DF, Y_col_name, log_save, over_sampling = over_sampling, module_name = module_name)
+      system(glue("python3 src/py-roc.py -b {base_dir} -d {df_path} -l {log_save} -f {f_name} -m {m_name} -o True", 
+                  base_dir = log_save,
+                  log_save = log_save,
+                  df_path = paste0(log_save, "df_temp.csv"), 
+                  f_name = Y_col_name,
+                  m_name = module_name)
+      )
+      roc_auc_list[[trait_name]] <- jsonlite::read_json(paste0(log_save, 'ml_validation_result.json'))
+      
     } else {
-      roc_auc_list[[trait_name]] <- roc_acu_calculator_cv(DF, Y_col_name, log_save, over_sampling = over_sampling, module_name = module_name)
+      # roc_auc_list[[trait_name]] <- roc_acu_calculator_cv(DF, Y_col_name, log_save, over_sampling = over_sampling, module_name = module_name)
+      system(glue("python3 src/py-roc.py -b {base_dir} -d {df_path} -l {log_save} -f {f_name} -m {m_name} -o True", 
+                  base_dir = log_save,
+                  log_save = log_save,
+                  df_path = paste0(log_save, "df_temp.csv"), 
+                  f_name = Y_col_name,
+                  m_name = module_name)
+      )
+      roc_auc_list[[trait_name]] <- jsonlite::read_json(paste0(log_save, 'ml_validation_result.json'))
+      
     }
   }
   
@@ -1683,6 +1720,7 @@ protein_atlas <- function(gene_name){
 further_analysis <- function(mc, ge, key_hub_gene, base_dir){
   # STRING analysis
   string_filtering <- string_analysis(mc, base_dir) %>% 
+    compact() %>% 
     lapply(X = ., FUN = function(df){
       df %>% mutate(STRING = TRUE)
     }) %>% bind_rows()

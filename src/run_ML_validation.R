@@ -22,13 +22,13 @@ for(m_name in names(key_hub_gene$intra_module)){
                                   over_sampling = TRUE) %>% compact()
   
   final_candidate_gene <- ml_validation(base_dir = base_dir, selected_gene = selected_gene,
-                                        over_sampling=TRUE, cv = FALSE, module_name = m_name) %>% 
+                                        over_sampling=TRUE, cv = FALSE, module_name = m_name) %>%
     auc_cutoff(sg_list = ., selected_gene = selected_gene, auc_cutoff = 0.7)
-  
+
   # final write
-  module_candidate[[m_name]] <- tibble(GENE_NAME = final_candidate_gene$auc_cutoff) %>% 
+  module_candidate[[m_name]] <- tibble(GENE_NAME = final_candidate_gene$auc_cutoff) %>%
     mutate(TRAIT = paste0(final_candidate_gene$trait, collapse = ";"),
-           MODULE = m_name) %>% 
+           MODULE = m_name) %>%
     arrange(GENE_NAME)
 }
 

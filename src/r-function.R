@@ -284,7 +284,7 @@ methylation_analysis <- function(pr_name, method_="both", base_dir){
       genome = "hg19", 
       met.platform = "450K", 
       # rm.chr = paste0("chr",c("Y")) # Y는 male specific
-      # rm.chr = paste0('chr', c(1:6, 10:22, "X","Y"))
+      rm.chr = paste0('chr', c(1:6, 10:22, "X","Y"))
     )
     
     mae <- createMAE(
@@ -328,7 +328,7 @@ methylation_analysis <- function(pr_name, method_="both", base_dir){
                                                   nearGenes = nearGenes_list[[method]],
                                                   mode = "unsupervised",
                                                   permu.dir = paste0(getwd(), "/", log_save, "/permu"),
-                                                  permu.size = 10000, # Please set to 100000 to get significant results
+                                                  permu.size = 1000, # Please set to 100000 to get significant results
                                                   raw.pvalue = 0.05,   
                                                   Pe = 0.001, # Please set to 0.001 to get significant results
                                                   filter.probes = TRUE, # See preAssociationProbeFiltering function
@@ -338,24 +338,24 @@ methylation_analysis <- function(pr_name, method_="both", base_dir){
                                                   cores = 20,
                                                   label = method)
       
-      # Mehtylation enrichiment analsis
-      enriched.motif_list[[method]] <- get.enriched.motif(data = mae,
-                                                          probes = pair_list[[method]]$Probe, 
-                                                          dir.out = paste0(getwd(), "/", log_save), 
-                                                          label = method,
-                                                          min.incidence = 10,
-                                                          lower.OR = 1.1)
-      
-      # TF analyis
-      TF_list[[method]] <- get.TFs(data = mae, 
-                                   group.col = "definition",
-                                   group1 =  "Primary solid Tumor",
-                                   group2 = "Solid Tissue Normal",
-                                   mode = "unsupervised",
-                                   enriched.motif = enriched.motif_list[[method]],
-                                   dir.out = paste0(getwd(), "/", log_save), 
-                                   cores = 1, 
-                                   label = method)
+      # # Mehtylation enrichiment analsis
+      # enriched.motif_list[[method]] <- get.enriched.motif(data = mae,
+      #                                                     probes = pair_list[[method]]$Probe, 
+      #                                                     dir.out = paste0(getwd(), "/", log_save), 
+      #                                                     label = method,
+      #                                                     min.incidence = 10,
+      #                                                     lower.OR = 1.1)
+      # 
+      # # TF analyis
+      # TF_list[[method]] <- get.TFs(data = mae, 
+      #                              group.col = "definition",
+      #                              group1 =  "Primary solid Tumor",
+      #                              group2 = "Solid Tissue Normal",
+      #                              mode = "unsupervised",
+      #                              enriched.motif = enriched.motif_list[[method]],
+      #                              dir.out = paste0(getwd(), "/", log_save), 
+      #                              cores = 1, 
+      #                              label = method)
     }
     
     save(methylation_filtering, file = paste0(log_save, "/", pr_name, "_methylation_filtering.RData"))

@@ -283,8 +283,8 @@ methylation_analysis <- function(pr_name, method_="both", base_dir){
     distal.probes <- get.feature.probe(
       genome = "hg19", 
       met.platform = "450K", 
-      # rm.chr = paste0("chr",c("Y")) # Y는 male specific
-      rm.chr = paste0('chr', c(1:6, 10:22, "X","Y"))
+      rm.chr = paste0("chr",c("Y")) # Y는 male specific
+      # rm.chr = paste0('chr', c(1:6, 10:22, "X","Y"))
     )
     
     mae <- createMAE(
@@ -328,7 +328,7 @@ methylation_analysis <- function(pr_name, method_="both", base_dir){
                                                   nearGenes = nearGenes_list[[method]],
                                                   mode = "unsupervised",
                                                   permu.dir = paste0(getwd(), "/", log_save, "/permu"),
-                                                  permu.size = 1000, # Please set to 100000 to get significant results
+                                                  permu.size = 10000, # Please set to 100000 to get significant results
                                                   raw.pvalue = 0.05,   
                                                   Pe = 0.001, # Please set to 0.001 to get significant results
                                                   filter.probes = TRUE, # See preAssociationProbeFiltering function
